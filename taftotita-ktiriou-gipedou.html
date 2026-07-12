@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ηλεκτρονική Ταυτότητα Κτιρίου/Γηπέδου — Τεχνικό Γραφείο Γεωργακόπουλος</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12161b;
+    --bg-panel:#181d24;
+    --bg-elevated:#1f262e;
+    --bg-hover:#252d37;
+    --border:#2a323c;
+    --border-soft:#232a33;
+    --text:#e7ebf0;
+    --text-dim:#8b95a3;
+    --text-faint:#5c6672;
+    --amber:#e2a53c;
+    --amber-dim:#8a6a34;
+    --teal:#2bb8a6;
+    --teal-dim:#1f7d72;
+    --red:#e2593c;
+    --shadow: 0 8px 28px rgba(0,0,0,.45);
+    --radius: 8px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      linear-gradient(var(--bg), var(--bg)) ,
+      repeating-linear-gradient(0deg, rgba(226,165,60,.035) 0 1px, transparent 1px 88px),
+      repeating-linear-gradient(90deg, rgba(226,165,60,.035) 0 1px, transparent 1px 88px);
+    color:var(--text);
+    font-family:'IBM Plex Sans', system-ui, sans-serif;
+    min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  ::selection{background:var(--amber); color:#1a1a1a;}
+  ::-webkit-scrollbar{width:10px; height:10px;}
+  ::-webkit-scrollbar-track{background:var(--bg-panel);}
+  ::-webkit-scrollbar-thumb{background:var(--border); border-radius:5px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--amber-dim);}
+
+  .wrap{max-width:1440px; margin:0 auto; padding:22px 26px 60px;}
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap:24px; margin-bottom:18px; flex-wrap:wrap;
+  }
+  .brand-eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:.14em;
+    color:var(--amber); text-transform:uppercase; margin:0 0 6px; display:flex; align-items:center; gap:8px;
+  }
+  .brand-eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--teal); box-shadow:0 0 8px var(--teal);}
+  .app-nav{display:flex; gap:14px; margin:0 0 10px; font-size:12px; font-family:'IBM Plex Mono', monospace;}
+  .app-nav a{color:var(--text-faint); text-decoration:none; padding:3px 0; border-bottom:2px solid transparent;}
+  .app-nav a:hover{color:var(--text);}
+  .app-nav a.active{color:var(--amber); border-bottom-color:var(--amber);}
+  h1{font-size:26px; font-weight:600; margin:0; letter-spacing:-.01em;}
+  h1 span{color:var(--text-dim); font-weight:400;}
+  .subtitle{color:var(--text-dim); font-size:13.5px; margin-top:4px;}
+
+  .header-stats{display:flex; gap:10px; flex-wrap:wrap;}
+  .stat-chip{
+    background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:9px 14px; min-width:96px; text-align:right;
+  }
+  .stat-chip .num{font-family:'IBM Plex Mono'; font-size:19px; font-weight:600; color:var(--amber); line-height:1;}
+  .stat-chip .lbl{font-size:10.5px; color:var(--text-dim); margin-top:3px; text-transform:uppercase; letter-spacing:.06em;}
+
+  /* ---------- Status distribution (signature element) ---------- */
+  .timeline{
+    background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px 10px; margin-bottom:16px;
+  }
+  .timeline-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .timeline-head .t-title{font-size:11.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.08em; font-family:'IBM Plex Mono';}
+  .timeline-head .t-clear{font-size:11.5px; color:var(--teal); cursor:pointer; display:none;}
+  .timeline-head .t-clear.show{display:inline;}
+  .timeline-bars{display:flex; align-items:flex-end; gap:4px; height:52px;}
+  .tbar{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; cursor:pointer; gap:4px;}
+  .tbar .fill{width:100%; background:linear-gradient(180deg, var(--amber), var(--amber-dim)); border-radius:3px 3px 0 0; min-height:2px; transition:background .12s, opacity .12s;}
+  .tbar:hover .fill, .tbar.active .fill{background:linear-gradient(180deg, var(--teal), var(--teal-dim));}
+  .tbar.dim .fill{opacity:.28;}
+  .tbar .dlbl{font-size:9.5px; color:var(--text-faint); font-family:'IBM Plex Mono'; text-align:center; line-height:1.3;}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; align-items:center;
+  }
+  .search-box{position:relative; flex:1 1 280px; min-width:220px;}
+  .search-box input{
+    width:100%; background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:10px 12px 10px 36px; color:var(--text); font-size:14px; font-family:inherit;
+  }
+  .search-box input:focus{outline:none; border-color:var(--amber);}
+  .search-box svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); opacity:.5;}
+
+  select, .yr-input{
+    background:var(--bg-panel); border:1px solid var(--border); border-radius:var(--radius);
+    color:var(--text); font-size:13.5px; padding:10px 10px; font-family:inherit;
+  }
+  select:focus, .yr-input:focus{outline:none; border-color:var(--amber);}
+
+  .btn{
+    background:var(--bg-elevated); border:1px solid var(--border); color:var(--text);
+    border-radius:var(--radius); padding:10px 15px; font-size:13.5px; font-family:inherit;
+    cursor:pointer; display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+    transition:border-color .12s, background .12s;
+  }
+  .btn:hover{border-color:var(--amber-dim); background:var(--bg-hover);}
+  .btn-primary{background:var(--amber); border-color:var(--amber); color:#1a1408; font-weight:600;}
+  .btn-primary:hover{background:#eab553; border-color:#eab553;}
+  .btn-ghost{background:transparent; border-color:transparent; color:var(--text-dim);}
+  .btn-ghost:hover{color:var(--text); border-color:var(--border);}
+  .btn-danger{color:var(--red); border-color:var(--red);}
+  .btn-danger:hover{background:rgba(226,89,60,.12);}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+
+  .result-line{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;
+    font-size:12.5px; color:var(--text-dim); font-family:'IBM Plex Mono';
+  }
+  .result-line b{color:var(--amber); font-weight:600;}
+  .sort-hint{color:var(--text-faint);}
+
+  /* ---------- Table ---------- */
+  .table-shell{
+    border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--bg-panel);
+  }
+  .t-head, .t-row{
+    display:grid;
+    grid-template-columns: 84px 108px minmax(180px,1.5fr) 160px 190px 34px;
+    align-items:center;
+  }
+  .t-head{
+    background:var(--bg-elevated); border-bottom:1px solid var(--border);
+    font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim);
+    font-family:'IBM Plex Mono';
+  }
+  .t-head > div{padding:11px 12px; cursor:pointer; user-select:none; display:flex; align-items:center; gap:5px;}
+  .t-head > div:hover{color:var(--text);}
+  .t-head .arrow{font-size:9px; color:var(--amber);}
+  .scroll-area{height:58vh; min-height:360px; overflow-y:auto; position:relative;}
+  .spacer{position:relative; width:100%;}
+  .viewport{position:absolute; left:0; right:0;}
+  .t-row{
+    border-bottom:1px solid var(--border-soft); cursor:pointer; font-size:13.3px;
+  }
+  .t-row:hover{background:var(--bg-hover);}
+  .t-row.new-row{box-shadow: inset 3px 0 0 var(--teal);}
+  .t-row.edited-row{box-shadow: inset 3px 0 0 var(--amber);}
+  .t-row > div{padding:9px 12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .t-row .c-file{font-family:'IBM Plex Mono'; color:var(--amber);}
+  .t-row .c-plot{font-family:'IBM Plex Mono'; color:var(--text-dim);}
+  .t-row .c-owner{color:var(--text);}
+  .t-row .c-kaek{color:var(--text-dim); font-family:'IBM Plex Mono'; font-size:12px;}
+  .t-row .c-cert{font-size:11px;}
+  .cat-badge{
+    display:inline-block; padding:3px 8px; border-radius:20px; border:1px solid var(--border);
+    color:var(--text-dim); font-family:'IBM Plex Mono'; font-size:10.5px; white-space:nowrap;
+  }
+  .cat-badge.badge-yes{border-color:var(--teal-dim); color:var(--teal);}
+  .cat-badge.badge-no{border-color:var(--red); color:var(--red);}
+  .cat-badge.badge-pending{border-color:var(--amber-dim); color:var(--amber);}
+  .t-row .c-go{color:var(--text-faint); text-align:center;}
+  .empty-state{padding:60px 20px; text-align:center; color:var(--text-dim);}
+  .empty-state .big{font-size:32px; margin-bottom:8px;}
+
+  footer{margin-top:22px; display:flex; justify-content:space-between; color:var(--text-faint); font-size:11.5px; flex-wrap:wrap; gap:8px;}
+  footer a{color:var(--teal); text-decoration:none;}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(8,10,13,.72); backdrop-filter:blur(2px);
+    display:none; align-items:flex-start; justify-content:center; z-index:100; padding:5vh 16px 5vh;
+    overflow-y:auto;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:var(--bg-panel); border:1px solid var(--border); border-radius:12px;
+    width:100%; max-width:560px; box-shadow:var(--shadow); animation:pop .14s ease-out;
+  }
+  @keyframes pop{from{transform:translateY(6px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  .modal-head{
+    display:flex; justify-content:space-between; align-items:center; padding:18px 20px;
+    border-bottom:1px solid var(--border);
+  }
+  .modal-head h2{font-size:16px; margin:0; font-weight:600;}
+  .modal-head .src-tag{font-size:11px; color:var(--text-faint); font-family:'IBM Plex Mono'; margin-top:3px;}
+  .modal-close{cursor:pointer; color:var(--text-dim); background:none; border:none; font-size:20px; padding:2px 6px; line-height:1;}
+  .modal-close:hover{color:var(--text);}
+  .modal-body{padding:18px 20px; display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .modal-body.detail{display:block;}
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field.full{grid-column:1/-1;}
+  .field label{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em;}
+  .field input, .field select, .field textarea{
+    background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; color:var(--text);
+    padding:9px 10px; font-size:13.5px; font-family:inherit;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--amber);}
+  .field textarea{resize:vertical; min-height:56px;}
+  .detail-grid{display:grid; grid-template-columns:150px 1fr; gap:10px 14px; font-size:13.5px;}
+  .detail-grid dt{color:var(--text-dim); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; padding-top:2px;}
+  .detail-grid dd{margin:0; color:var(--text); white-space:pre-wrap;}
+  .modal-foot{
+    display:flex; justify-content:space-between; gap:10px; padding:16px 20px; border-top:1px solid var(--border);
+  }
+  .modal-foot .left{display:flex; gap:8px;}
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--bg-elevated); border:1px solid var(--teal); color:var(--text);
+    padding:11px 18px; border-radius:8px; font-size:13px; opacity:0; pointer-events:none;
+    transition:all .2s ease; z-index:200; box-shadow:var(--shadow);
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:860px){
+    .t-head, .t-row{grid-template-columns: 70px 1fr 34px;}
+    .t-head .h-kaek, .t-row .c-kaek, .t-head .h-cert, .t-row .c-cert, .t-head .h-plot, .t-row .c-plot{display:none;}
+    .modal-body{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="brand-eyebrow"><span class="dot"></span>Τεχνικό Γραφείο Γεωργακόπουλος &amp; Φουντάς — Αμαλιάδα</p>
+      <nav class="app-nav"><a href="index.html">Οικοδομικές Άδειες</a><a href="taftotita-ktiriou-gipedou.html" class="active">Ηλ. Ταυτότητα Κτιρίου/Γηπέδου</a></nav>
+      <h1>Ηλεκτρονική <span>Ταυτότητα Κτιρίου / Γηπέδου</span></h1>
+      <p class="subtitle">Φάκελοι ιδιοκτησιών, ΚΑΕΚ, πιστοποιητικά και εκκρεμότητες</p>
+    </div>
+    <div class="header-stats">
+      <div class="stat-chip"><div class="num mono" id="statTotal">0</div><div class="lbl">Φάκελοι</div></div>
+      <div class="stat-chip"><div class="num mono" id="statCert">0</div><div class="lbl">Με πιστοποιητικό</div></div>
+      <div class="stat-chip"><div class="num mono" id="statPending">0</div><div class="lbl">Εκκρεμότητες</div></div>
+      <div class="stat-chip"><div class="num mono" id="statArchived">0</div><div class="lbl">Αρχειοθετημένοι</div></div>
+    </div>
+  </header>
+
+  <div class="timeline" id="timelineBox">
+    <div class="timeline-head">
+      <span class="t-title">Κατανομή ανά κατάσταση πιστοποιητικού</span>
+      <span class="t-clear" id="certClear">✕ καθαρισμός φίλτρου</span>
+    </div>
+    <div class="timeline-bars" id="timelineBars"></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Αναζήτηση: ιδιοκτήτης, α/α φακέλου, αρ. γηπέδου, ΚΑΕΚ, σχόλια…">
+    </div>
+    <select id="certFilter"><option value="">Όλα τα πιστοποιητικά</option></select>
+    <select id="handlerFilter"><option value="">Όλοι οι υπεύθυνοι</option></select>
+    <select id="statusFilter">
+      <option value="">Όλες οι εγγραφές</option>
+      <option value="pending">Με εκκρεμότητες</option>
+      <option value="archived">Αρχειοθετημένοι</option>
+    </select>
+    <button class="btn btn-ghost" id="clearFiltersBtn">Καθαρισμός</button>
+    <span style="flex:1"></span>
+    <button class="btn" id="exportBtn">⬇ Εξαγωγή CSV</button>
+    <button class="btn btn-primary" id="addBtn">+ Νέα Εγγραφή</button>
+  </div>
+
+  <div class="result-line">
+    <span id="resultCount">—</span>
+    <span class="sort-hint" id="sortHint"></span>
+  </div>
+
+  <div class="table-shell">
+    <div class="t-head">
+      <div data-sort="fileNo">Α/Α Φακ. <span class="arrow" data-arrow="fileNo"></span></div>
+      <div class="h-plot" data-sort="plotNo">Αρ. Γηπέδου <span class="arrow" data-arrow="plotNo"></span></div>
+      <div data-sort="owner">Ιδιοκτήτης <span class="arrow" data-arrow="owner"></span></div>
+      <div class="h-kaek" data-sort="kaek">ΚΑΕΚ <span class="arrow" data-arrow="kaek"></span></div>
+      <div class="h-cert" data-sort="certificate">Πιστοποιητικό <span class="arrow" data-arrow="certificate"></span></div>
+      <div></div>
+    </div>
+    <div class="scroll-area" id="scrollArea">
+      <div class="spacer" id="spacer">
+        <div class="viewport" id="viewport"></div>
+      </div>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="big">🔍</div>
+        Δεν βρέθηκαν εγγραφές με αυτά τα κριτήρια.
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Δεδομένα Ηλεκτρονικής Ταυτότητας Κτιρίου/Γηπέδου · οι νέες καταχωρήσεις και επεξεργασίες αποθηκεύονται τοπικά.</span>
+    <span id="storageState">Τοπική αποθήκευση: —</span>
+  </footer>
+</div>
+
+<!-- Detail / Edit Modal -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal" id="detailModal">
+    <div class="modal-head">
+      <div>
+        <h2 id="detailTitle">Φάκελος</h2>
+        <div class="src-tag" id="detailSrcTag"></div>
+      </div>
+      <button class="modal-close" data-close>✕</button>
+    </div>
+    <div class="modal-body detail" id="detailView"></div>
+    <div class="modal-body" id="editView" style="display:none;"></div>
+    <div class="modal-foot">
+      <div class="left">
+        <button class="btn btn-danger" id="deleteBtn">Διαγραφή</button>
+      </div>
+      <div class="left">
+        <button class="btn btn-ghost" id="cancelEditBtn" style="display:none;">Άκυρο</button>
+        <button class="btn" id="editToggleBtn">Επεξεργασία</button>
+        <button class="btn btn-primary" id="saveEditBtn" style="display:none;">Αποθήκευση</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Modal -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Νέα Εγγραφή</h2>
+      <button class="modal-close" data-close>✕</button>
+    </div>
+    <div class="modal-body" id="addForm"></div>
+    <div class="modal-foot">
+      <span></span>
+      <div class="left">
+        <button class="btn btn-ghost" data-close>Ακύρωση</button>
+        <button class="btn btn-primary" id="saveAddBtn">Προσθήκη</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script id="building-id-data" type="application/json">[[1,"ΣΠΗΛΙΟΠΟΥΛΟΥ- ΚΟΛΟΚΥΘΑ",4379,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.404"],[2,"ΣΚΟΥΡΛΗΣ ΘΕΟΔΩΡΟΣ- ΓΟΥΡΝΟΚΟΥΜΑΣΟ",4889,null,"150194603040","ΝΑΙ","ΑΔΟΜΗΤΑ: 47037/ 47072",null,null,"ΑΥΘ.315"],[3,"ΣΦΥΡΗ ΔΙΟΝΥΣΙΑ",7510,null,null,null,null,null,null,null],[4,"ΠΑΠΑΔΟΠΟΥΛΟΥ ΚΩΝΣΤΑΝΤΙΝΑ (ΚΟΡΟΝΤΖΗΣ)",7560,null,null,null,null,null,null,null],[5,"ΤΣΑΡΟΥΧΑ ΖΩΗ",7661,null,"150190303006","ΝΑΙ",null,null,null,"ΑΥΘ.400"],[6,"ΤΣΟΥΤΣΙΑΣ ΣΩΤΗΡΗΣ",8592,null,null,"ΝΑΙ",null,null,null,null],[7,"ΠΙΤΣΟΥΝΗΣ ΒΑΣΙΛΕΙΟΣ",10238,"ΘΑΝΑΣΗΣ","150190727014","ΝΑΙ",null,null,"εχουν δημιουργηθει οριζοντιες","ΑΥΘ.410"],[8,"ΠΑΠΙΔΑ ΠΑΝΑΓΟΥΛΑ",10394,null,"150420208001","ΝΑΙ",null,null,"εχουν δημιουργηθει οριζοντιες","ΑΥΘ.408"],[9,"ΤΣΙΓΓΑΝΟΣ ΑΝΔΡΕΑΣ",11123,null,null,"ΝΑΙ",null,null,null,null],[10,"ΜΑΣΟΥΡΑΣ",11704,null,null,"ΝΑΙ",null,null,null,null],[11,"ΞΕΝΟΥ ΧΡΙΣΤΟΥΛΑ",12573,null,"150190242003","ΝΑΙ",null,null,null,null],[12,"ΦΙΛΟΛΙΑΣ ΓΕΩΡΓΙΟΣ",13946,null,null,"ΝΑΙ",null,null,null,null],[13,"ΠΑΠΑΜΑΝΩΛΟΠΟΥΛΟΣ ΚΩΣΤΑΣ",14308,null,"150194037004","ΝΑΙ",null,null,null,null],[14,"ΠΑΠΑΓΕΩΡΓΙΟΥ ΤΡΙΣΑ",14562,null,null,null,null,null,null,null],[15,"ΜΑΣΣΑΛΑ ΓΕΩΡΓΙΑ ΚΑΙ ΚΩΝΣΤΑΝΤΙΝΟΣ",14587,"ΘΑΝΑΣΗΣ","150191117010","ΝΑΙ",null,null,null,"ΑΥΘ.407"],[16,"ΣΑΡΑΒΑΚΟΥ ΕΛΕΝΗ",14893,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.414"],[17,"KOYNIAKH",15099,null,"150191037005","ΝΑΙ",null,null,null,"ΑΥΘ.415"],[18,"ΠΑΡΑΣΚΕΥΟΠΟΥΛΟΣ (ΚΟΥΡΟΣ)",17853,null,"150190837006","ΝΑΙ",null,null,null,"ΑΥΘ.422"],[19,"ΣΠΗΛΙΟΠΟΥΛΟΣ-ΜΑΡΑΖΙΩΤΗΣ",null,null,null,"ΝΑΙ",null,null,null,null],[20,"ΚΑΡΑΜΠΕΛΑΣ ΓΙΩΡΓΟΣ",21428,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,"ΑΥΘ.416"],[21,"ΠΑΝΟΥΤΣΟΠΟΥΛΟΥ ΑΓΓΕΛΙΚΗ",34985,null,null,"ΝΑΙ",null,null,"εχουν δημιουργηθει οριζοντιες","ΑΥΘ.437"],[22,"ΚΟΝΤΟΠΑΝΑΓΟΣ ΑΝΤΩΝΙΟΣ",34615,null,"150190801003","ΝΑΙ",null,null,null,"ΑΥΘ.440"],[23,"ΖΩΓΡΑΦΟΣ ΝΙΚΟΛΑΟΣ",37079,null,"152010417145",null,null,null,null,null],[24,"ΠΑΠΑΧΡΙΣΤΟΠΟΥΛΟΣ (ΦΟΥΡΝΟΣ)",45138,null,"150191119002","ΝΑΙ",null,null,null,"ΑΥΘ.212"],[25,"ΚΑΡΑΦΛΟΣ",45690,null,"150190704005","ΝΑΙ",null,null,null,null],[26,"ΚΑΡΑΦΛΟΣ",45771,null,"150190704007","ΝΑΙ",null,null,null,null],[27,"ΚΑΡΑΦΛΟΣ",45788,null,"150192804028","ΝΑΙ",null,null,null,null],[28,"ΚΑΡΑΦΛΟΣ",45934,null,"150192804029","ΝΑΙ",null,null,null,null],[29,"ΚΑΡΑΦΛΟΣ- ΔΕΞΑΜΕΝΕΣ",null,null,"150190704007-150190704005-150192804029-150192813017-150192804028-150192813007","ΝΑΙ",null,null,null,null],[30,"ΑΥΓΕΡΙΝΟΠΟΥΛΟΣ",48051,null,null,"ΝΑΙ",null,null,null,null],[31,"ΣΓΑΝΤΖΟΥ",49665,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[32,"ΧΑΡΛΑΥΤΗΣ ΑΝΔΡΕΑΣ ΚΑΙ ΓΕΩΡΓΙΟΣ",67691,null,"150400205007","ΝΑΙ",null,null,null,"ΑΥΘ.55"],[33,"ΑΔΑΜΟΠΟΥΛΟΥ ΦΩΤΕΙΝΗ",98656,null,"150660512028","ΝΑΙ",null,null,null,null],[34,"ΣΑΛΤΑΡΗ ΧΡΙΣΤΙΝΑ (ΠΙΤΣΙΡΙΛΟ)",73365,"ΘΑΝΑΣΗΣ","150193822010","ΝΑΙ",null,null,null,null],[35,"ΛΑΒΔΑΣ ΣΚΑΦΙΔΙΑ",76544,null,null,"ΝΑΙ",null,null,null,null],[36,"ΚΡΙΝΑ ΜΑΙΡΗ",101459,"ΘΑΝΑΣΗΣ","150360507008","ΝΑΙ",null,null,null,null],[37,"ΑΝΑΓΝΩΣΤΟΠΟΥΛΟΣ ΣΑΚΗΣ",null,"ΘΑΝΑΣΗΣ","152090202092-152090202083","ΝΑΙ",null,null,null,null],[38,"ΓΙΑΝΝΑΚΟΠΟΥΛΟΣ ΣΩΤΗΡΙΟΣ",94350,null,"151000305015","ΝΑΙ",null,null,null,null],[39,"ΒΛΑΧΟΠΟΥΛΟΣ (ΒΑΣΙΛΟΠΟΥΛΟΣ)",111441,null,"150350226003","ΝΑΙ",null,null,null,null],[40,"ΓΙΑΛΑΜΑΣ ΚΩΝΣΤΑΝΤΙΝΟΣ",null,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.20"],[41,"ΞΥΛΟΚΟΤΑΣ",88731,null,"150192922011","ΝΑΙ",null,null,null,null],[42,"ΣΚΛΗΒΑΣ ΑΜΑΛΙΑΔΑ",100580,null,"150191325021",null,null,null,null,"ΑΥΘ.452"],[43,"ΝΤΑΝΑΣΗΣ ΠΑΝΑΓΙΩΤΗΣ",101193,"ΘΑΝΑΣΗΣ","150680402119","ΝΑΙ",null,null,null,null],[44,"ΛΟΥΚΟΠΟΥΛΟΥ ΓΕΩΡΓΙΑ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[45,"ΜΑΡΑΖΙΩΤΗΣ ΝΙΚΟΛΑΟΣ",105727,"ΘΑΝΑΣΗΣ","152120901036","ΝΑΙ",null,null,null,null],[46,"ΧΡΥΣΑΝΘΑΚΟΠΟΥΛΟΣ (ΤΣΕΚΟΣ)",105573,null,null,"ΝΑΙ",null,null,null,null],[47,"ΤΣΕΚΟΣ (ΒΟΣΝΙΚ)",111161,null,"150193102014","ΝΑΙ",null,null,null,null],[48,"ΛΑΓΑΡΗΣ ΧΡΗΣΤΟΣ",148335,"ΘΑΝΑΣΗΣ","150190901003","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.135"],[49,"ΑΡΑΠΟΓΙΑΝΝΗΣ",144007,null,"150190713006","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[50,"ΜΑΣΟΥΡΑΣ",null,null,"151840308003","ΝΑΙ",null,null,null,null],[51,"ΜΑΡΑΖΙΩΤΗ- ΒΛΑΧΟΠΟΥΛΟΥ (ΚΑΜΑΡΙΝΟΣ)",156628,null,null,"ΝΑΙ",null,null,null,null],[52,"ΚΡΙΝΑ ΜΑΙΡΗ (ΕΞΟΙΚΟΝΟΜΩ)",157409,"ΘΑΝΑΣΗΣ","150192306011","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[53,"ΧΡΙΣΤΟΠΟΥΛΟΣ ΚΟΥΡΟΥΤΑ",null,null,"150192813017-150192813028-150192813007","ΝΑΙ",null,null,null,null],[54,"ΒΑΣΙΛΟΠΟΥΛΟΥ ΓΙΑΝΝΟΥΛΑ",null,null,"150810305002","ΝΑΙ",null,null,null,null],[55,"ΜΠΑΛΚΟΓΙΑΝΝΟΠΟΥΛΟΣ(ΒΑΣΟΥ)",null,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.318"],[56,"ΖΟΥΜΗΣ",155511,"ΘΑΝΑΣΗΣ","150193222004","ΝΑΙ",null,null,null,"ΑΥΘ.451"],[57,"ΣΤΑΥΡΟΠΟΥΛΟΥ-ΡΕΤΣΗΣ",null,null,"151790315005-151790316001","ΝΑΙ",null,null,null,null],[58,"ΡΟΔΟΠΟΥΛΟΣ ΙΩΑΝΝΗΣ (ΣΙΜΟΠΟΥΛΟ)",166378,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.454"],[59,"ΘΑΝΑΣΑΣ",null,null,null,"ΝΑΙ",null,null,null,null],[60,"ΑΣΒΕΣΤΑ",189414,null,null,"ΝΑΙ",null,null,null,null],[61,"ΕΛΕΥΘΕΡΙΟΥ ΧΡΙΣΤΙΝΑ (ΣΤΑΣΙΝΟΠΟΥΛΟΣ)",206879,"ΘΑΝΑΣΗΣ","151777007007","ΝΑΙ",null,null,null,"ΑΥΘ.450"],[62,"ΚΑΡΑΦΛΟΣ (ΒΑΒΕΛ)",null,null,"150192804007-150192804031","ΝΑΙ",null,null,null,"ΑΥΘ.458"],[63,"ΝΤΙΝΟΥ ΣΟΦΙΑ",216138,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[64,"ΧΑΔΟΥΛΑΣ",210506,null,"1501916090","ΝΑΙ",null,null,null,null],[65,"ΜΠΙΡΜΠΑ ΑΓΓΕΛΙΚΗ",214826,"ΘΑΝΑΣΗΣ","151110405031","ΝΑΙ",null,null,null,null],[66,"ΚΟΥΛΟΥΡΗ ΒΑΣΙΛΙΚΗ",216197,null,null,"ΝΑΙ",null,null,null,null],[67,"ΓΙΑΝΝΟΠΟΥΛΟΥ ΘΕΟΔΩΡΑ",218695,"ΘΑΝΑΣΗΣ","150350308004","ΝΑΙ",null,null,null,null],[68,"ΠΑΣΣΑ ΚΟΥΡΟΥΤΑ",null,null,null,"ΝΑΙ",null,null,null,null],[69,"ΓΚΙΝΑΛΑ ΝΙΚΗ",219609,null,null,"ΝΑΙ",null,null,null,null],[70,"ΚΟΥΤΣΑΝΤΩΝΗΣ ΘΕΟΔΩΡΟΣ",219954,null,"150192817009",null,null,null,null,"ΑΥΘ.460"],[71,"ΛΕΩΝΙΔΟΠΟΥΛΟΣ",null,null,null,"ΝΑΙ",null,null,null,null],[72,"ΝΙΚΟΛΟΠΟΥΛΟΥ",null,"ΘΑΝΑΣΗΣ","150620705027","ΝΑΙ",null,null,null,null],[73,"ΝΤΑΤΣΟΠΟΥΛΟΥ",null,null,"150190524011-150190514018","ΝΑΙ",null,null,null,"ΑΥΘ.470"],[74,"ΠΑΠΑΔΟΠΟΥΛΟΣ",231810,"ΘΑΝΑΣΗΣ","152010309052","ΝΑΙ",null,null,null,null],[75,"ΜΠΟΥΝΤΟΥΒΗΣ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[76,"ΚΑΣΣΙΑΝΟΣ-ΓΙΑΝΝΟΠΟΥΛΟΥ",316011,null,null,"ΝΑΙ",null,null,null,null],[77,"ΚΑΤΣΑΣ ΔΗΜΗΤΡΙΟΣ",271164,null,"150190728006","ΝΑΙ",null,null,null,"ΑΥΘ.158"],[78,"ΝΙΚΟΛΟΠΟΥΛΟΥ ΝΙΚΟΛΙΤΣΑ",null,null,"150193706023-150195402019-150194905058","ΝΑΙ",null,null,null,"ΑΥΘ.462"],[79,"ΣΠΗΛΙΟΠΟΥΛΟΥ",293478,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[80,"ΕΛΙΣΑΙΟΠΟΥΛΟΣ",331324,null,null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.145"],[81,"ΤΟΥΦΑΣ ΓΕΩΡΓΙΟΣ",null,null,null,"ΝΑΙ",null,null,null,null],[82,"ΤΣΙΛΙΑΝΟΣ ΓΕΩΡΓΙΟΣ (ΚΑΣΙΔΙΑΡΗΣ ΑΜΑΛΙΑΔΑ)",283661,null,"150193204013","ΝΑΙ",null,null,null,null],[83,"ΔΑΡΒΙΡΑΣ ΔΗΜΗΤΡΙΟΣ",null,null,"150190424005-150190424015","ΝΑΙ","να γινει αρχειοθετηση του αρχικου",null,null,null],[84,"ΚΟΚΚΩΝΑΣ ΔΗΜΗΤΡΙΟΣ",null,null,"150194802238","ΝΑΙ",null,null,null,null],[85,"ΤΣΟΥΚΑΛΑ ΧΑΡΙΚΛΕΙΑ(ΔΙΟΝ ΜΑΡΙΝΟΣ)",361645,null,"150192419010","ΝΑΙ",null,null,null,null],[86,"ΚΑΡΑΜΠΕΛΑ ΕΡΑΣΜΙΑ",292424,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[87,"ΓΚΟΥΒΙΤΣΑ ΡΟΥΛΑ",325562,"ΧΕΛΜΗΣ","150190832001","ΝΑΙ",null,null,null,null],[88,"ΓΙΑΝΝΟΠΟΥΛΟΥ-A OΡΟΦΟΣ",395986,"ΘΑΝΑΣΗΣ","150190517003","ΝΑΙ",null,null,null,"ΑΥΘ.320"],[89,"ΝΙΚΟΛΟΠΟΥΛΟΣ ΧΡΗΣΤΟΣ",338574,null,"151840124010","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.209"],[90,"ΧΡΙΣΤΟΠΟΥΛΟΥ ΣΟΦΙΑ",397034,null,"150190508004","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.474"],[91,"ΤΑΣΣΟΠΟΥΛΟΣ ΔΗΜΗΤΡΙΟΣ",371635,"ΘΑΝΑΣΗΣ","150195007032","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[92,"ΓΚΡΙΛΛΑΣ ΧΡΗΣΤΟΣ (ΓΙΑΝΝΗΣ)",400529,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ","ΣΤΑΤΙΚΗ ΜΕΛΕΤΗ",null,"ΑΥΘ.262"],[93,"ΑΝΤΩΝΑΤΟΣ ΓΕΡΑΣΙΜΟΣ",297303,null,"150192420023","ΝΑΙ",null,null,null,"ΑΥΘ.25"],[94,"ΠΟΛΥΧΡΟΝΟΠΟΥΛΟΣ ΔΗΜΗΤΡΙΟΣ",302909,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[95,"ΑΓΓΕΛΟΠΟΥΛΟΥ ΡΟΔΑΝΘΗ",365113,"ΘΑΝΑΣΗΣ","150190528013","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,"ΕΊΝΑΙ ΤΟ ΙΔΙΟ ΟΙΚΟΠΕΔΟ ΜΕ ΤΟ 330","ΑΥΘ.468"],[96,"ΑΛΕΞΑΝΔΡΑΤΟΥ",303008,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.441"],[97,"ΚΕΡΠΙΝΙΩΤΗΣ ΑΝΤΩΝΗΣ",455999,"ΘΑΝΑΣΗΣ","152121148032","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.486"],[98,"ΖΑΧΑΡΙΑ ΟΥΡΑΝΙΑ",305305,null,null,"ΝΑΙ",null,null,null,null],[99,"ΣΧΟΙΝΑ ΕΥΑΓΓΕΛΙΑ",305695,"ΘΑΝΑΣΗΣ","150490217003","ΝΑΙ",null,null,null,"ΑΥΘ.467"],[100,"ΑΔΑΜΟΠΟΥΛΟΥ ΘΕΟΔΩΡΑ",317763,"ΘΑΝΑΣΗΣ","152121106012","ΝΑΙ",null,null,null,"ΑΥΘ.456"],[101,"ΒΙΔΟΠΟΥΛΟΥ ΧΑΡΙΚΛΕΙΑ- ΛΕΒΕΝΤΟΧΩΡΙ",319511,null,"151200101008","ΝΑΙ",null,null,null,null],[102,"ΓΙΑΝΝΟΠΟΥΛΟΥ ΑΝΑΣΤΑΣΙΑ(ΚΡΙΝΑΣ)",324929,null,null,"ΝΑΙ",null,null,null,null],[103,"ΒΑΣΙΛΟΠΟΥΛΟΥ ΚΑΜΕΝΙΤΣΙΩΤΙΚΑ",325319,null,"152031503038","ΝΑΙ",null,null,null,null],[104,"ΣΥΡΙΟΠΟΥΛΟΣ ΘΕΟΔΩΡΟΣ",333283,null,null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[105,"ΜΗΤΡΟΠΟΥΛΟΣ",329230,null,null,"ΝΑΙ",null,null,null,null],[106,"ΚΟΥΦΟΥΔΑΚΗ",329745,null,"150200119011","ΝΑΙ",null,null,null,null],[107,"ΚΑΝΕΛΛΟΠΟΥΛΟΥ ΖΩΪΤΣΑ",336709,"ΘΑΝΑΣΗΣ","150350117004","ΝΑΙ",null,null,null,"ΑΥΘ.464"],[108,"ΑΡΚΟΥΔΗ",null,"ΘΑΝΑΣΗΣ","150810108012","ΝΑΙ",null,null,null,"ΑΥΘ.455"],[109,"ΖΩΓΡΑΦΟΣ ΒΑΧΛΙΩΤΗ",null,null,"152010308043-152010211001","ΝΑΙ",null,null,null,null],[110,"ΑΣΒΕΣΤΑΣ",344641,"ΘΑΝΑΣΗΣ","151370215022","ΝΑΙ",null,null,null,null],[111,"ΧΡΙΣΤΟΠΟΥΛΟΥ ΦΑΝΗ",397034,"ΘΑΝΑΣΗΣ","150190508004","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.475"],[112,"ΠΙΤΣΟΥΝΗΣ",null,"ΘΑΝΑΣΗΣ","150190727014","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.410"],[113,"ΕΥΣΤΑΘΟΠΟΥΛΟΣ ΧΡΗΣΤΟΣ",342884,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[114,"ΛΑΣΚΑΡΗΣ ΑΜΑΛΙΑΔΑ",null,"ΘΑΝΑΣΗΣ","150190842006-150190843019-150190504009","ΝΑΙ",null,null,null,"ΑΥΘ.463- ΑΥΘ.394"],[115,"ΛΑΣΚΑΡΗΣ ΑΘΗΝΑ",511078,"ΘΑΝΑΣΗΣ","050090853007","ΝΑΙ",null,null,null,null],[116,"ΚΑΣΤΡΙΝΟΣ",452284,"ΘΑΝΑΣΗΣ","150490146007","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.198"],[117,"ΜΠΑΤΣΗΣ ΝΙΚΟΛΑΟΣ",495690,"ΘΑΝΑΣΗΣ","150060707025","ΝΑΙ",null,null,null,null],[118,"ΡΟΥΝΗΣ ΙΩΑΝΝΗΣ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[119,"ΠΕΡΕΝΤΗΣ ΠΑΝΤΕΛΗΣ",355836,null,null,"ΝΑΙ",null,null,null,null],[120,"ΜΠΟΥΚΟΥΒΑΛΑ (ΛΟΛΗΣ)",381708,null,null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[121,"ΜΑΡΚΟΠΟΥΛΟΣ ΓΕΡΑΚΙ",405209,null,null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,"ΕΊΝΑΙ ΤΟ ΙΔΙΟ ΟΙΚΟΠΕΔΟ ΜΕ ΤΗΝ 139","ΑΥΘ.392"],[122,"ΚΑΡΑΣΟΥΛΑΣ",415493,null,null,"ΝΑΙ",null,null,null,null],[123,"ΖΟΥΔΙΑΡΗ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[124,"ΖΑΧΑΡΙΑ ΚΕΝΤΡΟ",421345,null,null,"ΝΑΙ",null,null,null,null],[125,"ΚΟΥΝΙΑΚΗ (ΔΗΜΟΣ)",429555,null,null,"ΝΑΙ",null,null,null,null],[126,"ΘΑΝΑΣΑ ΟΛΥΜΠΙΑ KAI NIKOΛΟΠΟΥΛΟΥ",429579,"ΘΑΝΑΣΗΣ","150192910013","ΝΑΙ",null,null,"εχουν δημιουργηθει οριζοντιες",null],[127,"ΚΟΥΤΣΟΥΒΑΣ ΒΟΓΙΑΚΗ ΚΟΥΡΟΥΤΑ",436603,null,"150192822010","ΝΑΙ",null,null,null,"ΑΥΘ.478"],[128,"ΠΟΛΥΖΩΓΟΠΟΥΛΟΣ",464989,"ΧΕΛΜΗΣ","150190609017","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[129,"ΚΑΡΑΜΠΕΛΑ ΑΝΔΡΙΑΝΑ",451560,null,"150191128008","ΝΑΙ",null,null,null,"ΑΥΘ.483"],[130,"ΚΕΦΑΛΑΣ",465140,null,"150780307004","ΝΑΙ",null,null,null,null],[131,"ΠΑΝΑΓΑΡΗ",453002,null,null,"ΝΑΙ",null,null,null,null],[132,"ΑΡΒΑΝΙΤΗ ΑΘΑΝΑΣΙΑ-ΣΤΑΥΡΟΥΛΙΑΣ ΓΙΩΡΓΟΣ",457589,"ΘΑΝΑΣΗΣ","150195302055","ΝΑΙ",null,null,null,null],[133,"ΤΣΟΥΡΑΠΑ ΘΕΟΔΩΡΑ",null,null,"150190611013-150190611014","ΝΑΙ",null,null,null,"ΑΥΘ.156"],[134,"ΜΑΤΑΡΑΓΚΑ ΑΜΑΛΙΑΔΑ",null,null,"15019053006-150190530004","ΝΑΙ",null,null,null,"ΑΥΘ.286"],[135,"ΜΕΛΙΓΚΩΝΗΣ ΧΡΗΣΤΟΣ",495717,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[136,"ΒΟΓΙΑΤΖΑΚΗ ΑΔΑΜΑΝΤΙΑ",478073,null,"150191118003",null,null,null,null,"ΑΥΘ.490"],[137,"ΜΑΡΓΙΩΛΑΚΙΩΤΗ ΚΟΡΥΦΗ",495776,null,null,"ΝΑΙ",null,null,null,null],[138,"ΞΑΝΘΟΠΟΥΛΟΥ",null,null,"150200606013-150200606004","ΝΑΙ",null,null,null,null],[139,"ΜΑΡΚΟΠΟΥΛΟΥ ΓΕΡΑΚΙ",405209,null,null,"ΝΑΙ",null,"ΕΙΝΑΙ ΤΟ ΙΔΙΟ ΟΙΚΟΠΕΔΟ ΜΕ ΤΗΝ 121",null,null],[140,"ΒΑΣΙΛΟΠΟΥΛΟΥ ΣΤΑΦΙΔΟΚΑΜΠΟΣ",491877,null,null,"ΝΑΙ",null,null,null,null],[141,"ΘΕΟΔΩΡΟΠΟΥΛΟΣ ΘΑΝΑΣΗΣ",494339,null,null,"ΝΑΙ",null,null,null,null],[142,"ΚΟΥΤΡΟΥΜΠΗΣ ΚΩΣΤΑΣ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[143,"ΣΓΑΝΤΖΟΥ ΑΝΑΣΤΑΣΙΑ(ΧΩΡΑΦΙ)",493163,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[144,"ΚΥΒΕΡΝΗΤΗ ΠΑΡΑΣΚΕΥΗ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[145,"ΓΙΑΝΝΟΠΟΥΛΟΥ-Γ ΟΡΟΦΟΣ",395986,"ΘΑΝΑΣΗΣ","150190517003","ΝΑΙ",null,null,null,"ΑΥΘ.321"],[146,"ΚΟΛΛΙΟΠΟΥΛΟΣ ΔΗΜΗΤΡΗΣ",507498,null,"151450816002","ΝΑΙ",null,null,null,null],[147,"ΖΟΛΩΤΑΣ ΝΙΚΟΣ",null,"ΜΑΛΑΧΙΑΣ",null,"ΝΑΙ",null,null,null,null],[148,"ΚΟΛΛΙΟΠΟΥΛΟΣ ΠΑΝΑΓΙΩΤΗΣ ΚΑΙ ΚΩΝΣΤΑΝΤΙΝΟΣ",507600,null,"151450145028","ΝΑΙ",null,null,null,"ΑΥΘ.495"],[149,"ΑΥΓΕΡΙΝΟΠΟΥΛΟΣ ΚΩΣΤΑΣ",509710,null,"150193704032","ΝΑΙ",null,null,null,"ΑΥΘ.491"],[150,"ΒΛΑΣΣΟΠΟΥΛΟΣ ΚΩΝΣΤΑΝΤΙΝΟΣ",510132,null,null,"ΝΑΙ",null,null,null,null],[151,"ΛΙΑΡΟΠΟΥΛΟΥ ΜΑΡΙΑ(ΣΤΑΦΙΔΟΚΑΜΠΟΣ)",512011,null,null,"ΝΑΙ",null,null,null,null],[152,"ΔΕΔΕ",518196,"ΘΑΝΑΣΗΣ","150190723009","ΝΑΙ",null,null,null,null],[153,"ΜΠΙΡΜΠΑΣ (ΕΥΘΥΜΙΟΠΟΥΛΟΣ)",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[154,"ΚΟΡΔΟΝΟΥΡΗ ΓΙΩΤΑ (ΚΑΤΖΟΥΡΗ ΠΑΠΑΔΟΠΟΥΛΟΥ)",518130,null,null,"ΝΑΙ",null,null,null,null],[155,"ΓΚΑΤΖΟΥΝΑ",519271,"ΘΑΝΑΣΗΣ","150190505006","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,"ΕΊΝΑΙ Ο ΙΔΙΟΣ ΦΑΚΕΛΟΣ ΜΕ ΤΟΝ 296","ΑΥΘ.497"],[156,"ΠΑΠΙΔΑ ΠΑΝΑΓΟΥΛΑ (ΓΕΩΤΕΜΑΧΙΟ)",522038,null,null,"ΝΑΙ",null,null,null,null],[157,"ΑΘΑΝΑΣΟΠΟΥΛΟΥ ΑΣΗΜΩ",524688,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[158,"ΠΑΠΑΓΕΩΡΓΙΟΥ ΓΙΑΝΝΑ",517825,"ΘΑΝΑΣΗΣ","150190926002","ΝΑΙ",null,null,null,"ΑΥΘ.498"],[159,"ΑΛΕΞΑΝΔΡΟΠΟΥΛΟΥ ΚΑΒΑΣΙΛΑ",810768,"ΘΑΝΑΣΗΣ","150710116029",null,null,null,null,null],[160,"ΧΑΡΑΛΑΜΠΟΠΟΥΛΟΣ ΣΠΥΡΟΣ",536582,"ΘΑΝΑΣΗΣ","150570304063","ΝΑΙ",null,null,null,null],[161,"ΑΓ.ΓΕΩΡΓΙΟΣ ΑΜΑΛΙΑΔΑΣ",536330,null,"150190534014","ΝΑΙ",null,null,null,null],[162,"ΡΟΔΟΠΟΥΛΟΥ ΣΤΑΜΑΤΙΝΑ ΚΑΙ ΜΑΡΙΑ",541101,null,null,"ΝΑΙ",null,null,null,null],[163,"ΣΤΑΥΡΟΥΛΙΑΣ ΓΙΩΡΓΟΣ ΧΑΒΑΡΙ",null,null,"150195302044","ΝΑΙ",null,null,null,null],[164,"ΛΑΖΑΡΟΥ",551660,"ΘΑΝΑΣΗΣ","152120901035","ΝΑΙ",null,null,null,"ΑΥΘ.492"],[165,"ΔΗΜΟΠΟΥΛΟΣ ΔΗΜΗΤΡΗΣ",550244,null,"150191901070",null,null,null,null,"ΑΥΘ.382"],[166,"ΜΠΕΛΟΓΙΑΝΝΗ ΚΟΥΡΟΥΤΑ",551038,null,"150192844014","ΝΑΙ",null,null,null,null],[167,"ΣΤΑΥΡΟΥΛΙΑΣ ΝΕΚΡΟΤΑΦΕΙΟ(ΜΠΑΛΚΑΜΟΣ)",567554,"ΘΑΝΑΣΗΣ","152120106052","ΝΑΙ",null,null,null,null],[168,"ΣΤΑΥΡΟΥΛΙΑ ΦΙΟΡΟΥΛΑ",305140,null,"150191236009","ΝΑΙ",null,null,null,"ΑΥΘ.510"],[169,"ΓΕΝΝΑΙΟΣ (ΑΝΤΩΝΟΠΟΥΛΟΣ)",580104,null,"150940320023","ΝΑΙ",null,null,"εχουν καταργηθει οι οριζοντιες","ΑΥΘ.501"],[170,"ΠΑΝΑΓΟΠΟΥΛΟΣ ΣΤΑΥΡΟΣ ΚΑΙ ΕΥΑΓΓΕΛΟΣ",575880,null,null,"ΝΑΙ",null,null,null,null],[171,"ΠΙΤΣΟΥΝΗΣ ΒΑΣΙΛΕΙΟΣ(ΧΩΡΑΦΙΑ)",null,"ΘΑΝΑΣΗΣ","150570304026-150570304034-150570104008-150570302061-150570305075-151111302077-150570501007-150940304046","ΝΑΙ",null,null,null,null],[172,"ΣΤΕΦΑΝΟΠΟΥΛΟΣ ΙΩΑΝΝΗΣ",581841,"ΘΑΝΑΣΗΣ","152121002013","ΝΑΙ",null,null,null,null],[173,"ΨΥΧΟΓΙΟΣ ΝΙΟΧΩΡΙ",585126,null,"151530709020","ΝΑΙ",null,null,null,null],[174,"ΜΠΕΡΑΤΗ ΤΖΕΝΗ",591203,"ΘΑΝΑΣΗΣ","150190532009","ΝΑΙ",null,null,null,"ΑΥΘ.505"],[175,"ΓΚΡΙΛΛΑ ΘΕΟΔΩΡΑ",596219,"ΘΑΝΑΣΗΣ","152121112006","ΝΑΙ",null,null,null,"ΑΥΘ.413"],[176,"ΡΟΔΟΠΟΥΛΟΣ ΔΗΜΗΤΡΙΟΣ",599767,"ΘΑΝΑΣΗΣ","151880709036","ΝΑΙ",null,null,null,null],[177,"ΖΟΡΜΠΑ ΑΡΕΤΗ ΑΓΙΟΣ ΗΛΙΑΣ ΣΚΟΥΡΦΟΥΝΤΑΣ",600996,null,"150090402003","ΝΑΙ",null,null,null,null],[178,"ΠΑΝΑΓΑΡΗ ΓΙΑΝΝΟΥΛΑ (ΚΑΛΥΒΙΑ ΜΥΡΤΟΥΝΤΙΩΝ)",604748,null,"150790412005","ΝΑΙ",null,null,null,null],[179,"ΝΙΚΑΣ ΔΙΟΝΥΣΙΟΣ (ΛΥΓΙΑ)",607894,null,"151290511050","ΝΑΙ",null,null,null,null],[180,"ΛΙΑΚΟΠΟΥΛΟΣ ΞΕΝΟΦΩΝ ΚΑΙ ΕΛΕΝΗ",619277,null,"150193216003","ΝΑΙ",null,null,null,null],[181,"ΚΟΥΤΟΥΛΙΑΣ ΤΑΣΟΣ",619580,null,"150090113014","ΝΑΙ",null,null,null,null],[182,"ΝΙΚΟΛΑΟΥ ΔΗΜΗΤΡΑ",626975,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[183,"ΒΑΣΙΛΟΠΟΥΛΟΥ ΠΗΝΕΛΟΠΗ 2023",623781,null,"152031601042","ΝΑΙ",null,null,null,null],[184,"ΗΛΙΟΠΟΥΛΟΣ ΔΗΜΗΤΡΗΣ",null,null,"150500210003","ΝΑΙ",null,null,null,null],[185,"ΚΟΥΤΡΟΥΜΠΗΣ ΔΗΜΗΤΡΗΣ ΚΑΙ ΚΩΝΣΤΑΝΤΙΝΟΣ",634021,null,"15019440103","ΝΑΙ",null,null,null,null],[186,"ΚΑΘΟΛΙΚΗ ΓΑΣΤΟΥΝΗΣ",null,null,"150490809011","ΝΑΙ",null,null,null,null],[187,"ΣΤΑΘΑΚΟΣ ΣΑΧΛΑΣ",636209,null,"150194509082","ΝΑΙ",null,null,null,null],[188,"ΚΑΡΑΦΛΟΣ ΒΑΒΕΛ-8000",645304,null,null,"ΝΑΙ",null,null,null,null],[189,"ΚΑΡΑΦΛΟΣ 30,98",646354,null,null,null,null,null,null,null],[190,"ΝΙΚΟΛΟΠΟΥΛΟΥ ΕΛΠΙΔΑ",646692,null,"150060613032","ΝΑΙ",null,null,null,null],[191,"ΦΕΛΕΣΚΟΥΡΑΣ ΓΙΑΝΝΗΣ",762953,null,"150810302041","ΝΑΙ",null,null,null,null],[192,"ΣΤΕΦΑΝΟΠΟΥΛΟΥ ΙΩΑΝΝΑ",669348,"ΘΑΝΑΣΗΣ","150194509056",null,null,null,null,null],[193,"ΑΝΤΩΝΟΠΟΥΛΟΥ ΣΟΦΙΑ",672370,null,"150621008063-150621008068","ΝΑΙ",null,null,null,null],[194,"ΚΩΝΣΤΑΝΤΟΠΟΥΛΟΥ ΔΗΜΗΤΡΑ",null,null,null,null,null,null,null,null],[195,"ΜΠΙΡΜΠΑ ΚΥΡΙΑΚΗ (ΜΑΧΗ)",682167,"ΘΑΝΑΣΗΣ","150190318007","ΝΑΙ",null,null,"3 οριζοντιες","ΑΥΘ.502 ΚΑΙ 507"],[196,"ΚΑΔΑ ΘΕΟΔΩΡΑ(ΔΟΥΝΑΙΙΚΑ)",687086,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.513"],[197,"ΚΥΡΙΑΖΟΠΟΥΛΟΥ",698354,"ΘΑΝΑΣΗΣ","150190809001","ΝΑΙ",null,null,null,null],[198,"ΝΤΟΥΦΑ - ΠΑΠΑΡΟΥΣΑΚΗ (ΑΜΑΛΙΑΔΑ)",697537,null,"150190333003","ΝΑΙ",null,null,null,"ΑΥΘ.516"],[199,"ΠΑΠΑΣΠΥΡΟΠΟΥΛΟΣ (ΠΑΛΟΥΚΙ)",null,null,"150192503001","ΝΑΙ",null,null,null,"ΑΥΘ.512"],[200,"ΝΤΑΝΑΣΗΣ ΝΙΚΟΛΑΟΣ",715777,"ΘΑΝΑΣΗΣ","152121108012","ΝΑΙ",null,null,null,null],[201,"ΣΤΑΜΙΡΗΣ ΠΑΝΑΓΙΩΤΗΣ",717702,null,null,"ΝΑΙ",null,null,null,null],[202,"ΣΤΥΛΙΑΝΕΣΗΣ",723416,null,"150193818019","ΝΑΙ",null,null,null,"ΑΥΘ.519"],[203,"ΝΙΚΟΛΟΠΟΥΛΟΣ ΝΙΚΟΛΑΚΗΣ",725205,null,"150130309075","ΝΑΙ",null,null,null,null],[204,"ΨΥΧΟΓΙΟΣ ΚΟΥΡΟΥΤΑ",736128,null,"150192910023",null,null,null,null,null],[205,"ΠΑΣΣΑ ΚΟΥΡΟΥΤΑ",736532,null,"15019291002","ΝΑΙ",null,null,null,null],[206,"ΜΑΡΑΖΙΩΤΗΣ ΒΑΣΙΛΕΙΟΣ",null,"ΘΑΝΑΣΗΣ","152120104043-152120104039-152120104039","ΝΑΙ",null,null,null,null],[207,"ΤΣΟΥΜΠΕΛΗΣ",740850,"ΘΑΝΑΣΗΣ","150780208011","ΝΑΙ",null,null,null,null],[208,"ΚΟΤΣΙΡΩΝΗΣ ΓΕΩΡΓΙΟΣ",744214,"ΘΑΝΑΣΗΣ","151880131003","ΝΑΙ",null,null,null,null],[209,"ΔΗΜΗΤΡΑΚΟΠΟΥΛΟΣ ΚΑΙ ΔΗΜΗΤΡΑΚΟΠΟΥΛΟΥ",null,"και ΘΑΝΑΣΗΣ","150940404032","ΝΑΙ",null,null,null,null],[210,"ΚΟΣΜΟΠΟΥΛΟΣ (ΚΟΡΔΟΝΟΥΡΗ)",null,null,"150192302029-150192302017-150192302027","ΝΑΙ",null,null,null,null],[211,"ΚΡΗΤΙΚΟΣ ΣΟΥΠΕΡΜΑΡΚΕΤ",749658,null,"150190729010","ΝΑΙ",null,null,null,null],[212,"ΓΑΛΑΝΟΠΟΥΛΟΣ ΚΩΝΣΤΑΝΤΙΝΟΣ",null,"ΘΑΝΑΣΗΣ","150190924010","ΝΑΙ",null,null,null,"ΑΥΘ.281"],[213,"ΓΑΛΑΝΟΠΟΥΛΟΣ ΠΑΝΑΓΙΩΤΗΣ",null,"ΘΑΝΑΣΗΣ","150190924002","ΝΑΙ",null,null,null,"ΑΥΘ.282"],[214,"ΣΥΜΕΩΝΙΔΟΥ (ΓΕΩΡΓΟΠΟΥΛΟΥ ΦΟΝΑΙΤΙΚΑ)",754847,null,null,null,null,null,null,null],[215,"ΚΑΛΟΠΙΣΗΣ- ΚΛΗΡΟΝΟΜΟΙ ΔΟΥΡΟΥ",761776,null,"151840232004","ΝΑΙ",null,null,null,null],[216,"ΑΤΤΙΚΟΥ ΒΑΣΙΛΙΚΗ",null,null,"150191901352","ΝΑΙ",null,null,null,null],[217,"ΚΑΡΑΜΠΕΛΑ ΑΓΓΕΛΙΚΗ ΚΑΙ ΙΩΑΝΝΑ",775532,"ΘΑΝΑΣΗΣ","152121114005","ΝΑΙ",null,null,null,"ΑΥΘ.499"],[218,"ΓΚΟΥΒΙΤΣΑ ΡΟΥΛΑ ΑΜΑΛΙΑΔΑ",765282,null,"150190803001","ΝΑΙ",null,null,null,"ΑΥΘ.182"],[219,"ΚΥΠΡΟΥΛΗΣ",null,null,"150192708025-150192515013","ΝΑΙ",null,null,null,null],[220,"ΠΙΤΣΟΥΝΗΣ ΝΙΚΟΣ",775797,"ΘΑΝΑΣΗΣ","15019733004","ΝΑΙ",null,null,null,"ΑΥΘ.523"],[221,"ΣΟΥΓΛΕΡΗΣ",776104,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[222,"ΓΙΑΝΝΑΚΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ",779648,"ΘΑΝΑΣΗΣ","150710116106","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.477"],[223,"ΖΟΛΩΤΑΣ",791715,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.411"],[224,"ΣΚΑΡΔΑΝΑΣ",142577,"ΘΑΝΑΣΗΣ","150190901007/0/17","ΝΑΙ",null,null,null,null],[225,"ΑΚΡΙΒΟΥ",791437,null,"150190803001-150190424007","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.148"],[226,"ΜΑΤΑΡΑΓΚΑ ΜΑΡΙΑ",null,null,"150190530006-150190530004","ΝΑΙ",null,null,null,null],[227,"ΜΟΣΧΟΒΟΣ",811838,null,"150190817004","ΝΑΙ",null,null,null,"ΑΥΘ.506"],[228,"ΓΚΡΙΛΛΑΣ ΑΠΟΣΤΟΛΗΣ",804584,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[229,"ΠΑΠΑΖΑΦΕΙΡΟΠΟΥΛΟΣ ΟΡΦΕΑΣ",804695,"ΘΑΝΑΣΗΣ","150195202126","ΝΑΙ",null,null,null,null],[230,"ΜΠΙΡΜΠΑΣ (ΣΑΚΕΛΛΑΡΟΠΟΥΛΟΣ)",null,null,null,"ΝΑΙ",null,null,null,null],[231,"ΧΡΙΣΤΟΔΟΥΛΟΠΟΥΛΟΣ ΠΑΝΑΓΙΩΤΗΣ",816825,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,null],[232,"ΛΥΓΟΥΡΑ ΔΗΜΗΤΡΑ",814207,"ΘΑΝΑΣΗΣ","150620413007","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.359"],[233,"ΘΛΙΒΕΡΟΥ",null,null,"150192419019-150192419028","ΝΑΙ",null,null,null,"ΑΥΘ.233"],[234,"ΛΟΥΡΙΔΑΣ ΠΑΝΑΓΙΩΤΗΣ",814311,null,null,"ΝΑΙ",null,null,null,null],[235,"ΠΑΣΣΑ ΚΟΥΡΟΥΤΑ",null,null,null,"ΝΑΙ",null,null,null,null],[236,"ΠΑΝΤΑΖΗΣ ΚΩΝΣΤΑΝΤΙΝΟΣ",null,null,"151110402001-151110404009-151110503008-151110404005","ΝΑΙ",null,null,null,null],[237,"ΧΑΡΔΑΣ ΝΙΚΟΛΑΟΣ",821674,null,"150710710002","ΝΑΙ",null,null,null,null],[238,"ΚΑΡΑΘΑΝΑΣΗ",null,null,null,null,null,null,null,null],[239,"ΓΕΩΡΓΑΚΟΠΟΥΛΟΣ ΣΩΤΗΡΗΣ ΚΑΙ ΕΛΕΝΗ",815669,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.525"],[240,"ΑΡΓΥΡΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ",935103,null,"150192522005","ΝΑΙ",null,null,null,"ΑΥΘ.527"],[241,"ΜΠΙΧΤΑ ΚΑΤΙΝΑ",971700,"ΘΑΝΑΣΗΣ","150192304020","ΝΑΙ",null,null,null,null],[242,"ΡΑΛΛΗΣ ΗΛΙΑΣ",821872,"ΘΑΝΑΣΗΣ","152121111001","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.496"],[243,"ΚΑΘΟΛΙΚΗ ΓΑΣΤΟΥΝΗΣ ΤΕΜΑΧΙΟ 62",990282,"ΘΑΝΑΣΗΣ","150491204006","ΝΑΙ",null,null,null,null],[244,"ΠΑΠΑΔΑΤΟΣ ΓΕΩΡΓΙΟΣ",264590,null,null,null,null,null,null,null],[245,"ΚΑΨΗΣ (ΣΟΥΛΙΜΙΩΤΗΣ)",828015,null,null,"ΝΑΙ",null,null,null,null],[246,"ΣΤΑΘΑΚΟΠΟΥΛΟΣ",829932,null,null,"ΝΑΙ",null,null,null,null],[247,"ΖΩΓΟΠΟΥΛΟΣ",null,null,"150930301028-150930108045","ΝΑΙ",null,null,null,"ΑΥΘ.529"],[248,"ΚΙΝΤΟΣ",839345,"ΘΑΝΑΣΗΣ","150190846010","ΝΑΙ","ΕΞΟΙΚΟΝΟΜΩ",null,null,"ΑΥΘ.531"],[249,"ΓΚΡΙΛΛΑ ΒΑΣΙΛΙΚΗ",868395,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[250,"ΑΛΕΞΑΝΔΡΑ ΤΣΑΡΟΥΧΑ",880386,"ΘΑΝΑΣΗΣ","151180402061","ΝΑΙ",null,null,null,null],[251,"ΜΟΥΣΣΑΣ ΙΩΑΝΝΗΣ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[252,"ΘΕΟΔΩΡΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ",null,null,"150192629006","ΝΑΙ",null,null,null,null],[253,"ΑΘΑΝΑΣΟΠΟΥΛΟΥ ΜΠΟΡΣΙ",905930,null,"151382302001","ΠΡΟΣΩΡΙΝΗ ΕΚΤΥΠΩΣΗ",null,null,null,"ΑΥΘ.520"],[254,"ΚΟΥΤΡΟΥΜΠΗ ΠΑΡΑΣΚΕΥΗ",906818,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[255,"ΔΗΜΗΤΡΑΚΟΠΟΥΛΟΥ ΚΑΡΔΑΜΑΣ",907780,null,"150840108009","ΝΑΙ",null,null,null,"ΑΥΘ.537"],[256,"ΚΑΠΑΤΣΩΡΗ",930750,"ΘΑΝΑΣΗΣ","150190919008",null,null,null,null,null],[257,"ΓΙΕΜΟΣ ΣΤΕΦΑΝΟΣ",915998,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.224"],[258,"ΒΑΣΙΛΑΡΗ - ΚΕΦΑΛΛΗΝΟΣ",null,null,null,null,null,"ΠΛΗΡΩΜΕΝΗ",null,null],[259,"ΜΑΘΙΟΥΔΑΚΗ",917848,null,"151840363004",null,null,null,null,"ΑΥΘ.504"],[260,"ΜΠΑΛΤΑ ΖΑΦΕΙΡΩ",918161,null,null,null,null,null,null,"ΑΥΘ.535"],[261,"ΣΤΑΜΟΥ ΒΑΣΙΛΙΚΗ (ΠΑΠΑΖΑΦΕΙΡΟΠΟΥΛΟΥ)",927363,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[262,"ΠΟΥΡΝΑΡΑ",null,null,null,null,null,null,null,null],[263,"ΧΑΡΤΟΥΜΠΕΚΗ ΑΚΡΙΒΗ",927363,"ΘΑΝΑΣΗΣ","150660506048","ΝΑΙ",null,null,null,null],[264,"ΓΙΑΝΝΟΠΟΥΛΟΣ ΑΥΓΕΙΟ",946670,"ΘΑΝΑΣΗΣ","150350118004","ΝΑΙ",null,null,null,null],[265,"ΜΠΑΤΣΗ ΜΑΡΙΑ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[266,"ΚΑΡΑΦΛΟΣ ΔΗΜΗΤΡΙΟΣ ΚΑΙ ΘΕΟΔΩΡΑ",947244,null,"150192812004","ΝΑΙ",null,null,null,null],[267,"ΣΤΑΥΡΟΠΟΥΛΟΥ ΜΠΑΓΙΑ ΒΟΥΛΑ",947888,null,"150660510018","ΝΑΙ",null,null,null,null],[268,"ΓΙΑΝΝΟΠΟΥΛΟΥ ΕΛΕΝΗ",949061,null,null,"ΟΧΙ",null,null,null,"ΑΥΘ.536"],[269,"ΣΚΑΛΚΟΓΙΑΝΝΗ",null,null,"150490903031-150490903003",null,null,null,null,null],[270,"ΠΑΠΑΣΤΑΘΟΠΟΥΛΟΣ",963494,"ΘΑΝΑΣΗΣ","150190303001","ΝΑΙ",null,null,"αρχειοθετημενη αρχικη","ΑΥΘ.542"],[271,"ΚΟΚΚΙΝΑΚΗΣ",1247357,"ΘΑΝΑΣΗΣ","150190634004",null,null,null,null,"ΑΥΘ.546"],[272,"ΤΣΑΚΩΝΑΣ ΓΕΩΡΓΙΟΣ",831818,"ΘΑΝΑΣΗΣ","150190723004","ΝΑΙ",null,null,null,"ΑΥΘ.547"],[273,"ΠΟΥΡΙΚΗΣ ΧΡΗΣΤΟΣ",963287,null,"150192925012","ΝΑΙ",null,null,null,null],[274,"ΑΠΟΣΤΟΛΟΠΟΥΛΟΣ ΑΝΘΩΝΑΣ",963594,null,"151130412013","ΝΑΙ",null,null,null,null],[275,"ΣΟΛΑ ΝΙΚΗ",974331,"ΘΑΝΑΣΗΣ","150420401065","ΝΑΙ",null,null,null,null],[276,"ΜΑΛΛΙΑΡΗΣ ΓΙΩΡΓΟΣ",973508,null,"150710215003","ΝΑΙ",null,null,null,null],[277,"ΑΔΑΜΟΠΟΥΛΟΥ ΦΩΤΕΙΝΗ",974855,null,"150660512030","ΝΑΙ",null,null,null,null],[278,"ΜΠΟΥΣΙΟΣ",null,null,"152120402001","ΝΑΙ",null,null,null,null],[279,"ΜΠΟΥΖΗΣ",975932,null,"150193702045","ΝΑΙ",null,null,null,null],[280,"ΡΕΤΣΗΣ ΝΕΚΤΑΡΙΟΣ",null,null,null,"ΝΑΙ",null,null,null,null],[281,"ΤΟΥΤΟΥΝΗΣ ΒΙΚΤΩΡ",985377,null,"150194511043","ΝΑΙ",null,null,null,null],[282,"ΚΟΝΔΥΛΟΠΟΥΛΟΥ ΛΑΜΠΡΙΝΗ",988013,null,"150190730007","ΝΑΙ",null,null,"αρχειοθετημενη αρχικη ιδιοκτησια γιατι εγινε συσταση οριζοντιου",null],[283,"ΜΑΣΟΥΡΑ ΒΕΡΜΕ",991634,null,"151630506002","ΝΑΙ",null,null,null,null],[284,"ΣΤΑΘΟΠΟΥΛΟΣ ΙΩΑΝΝΗΣ",994035,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[285,"ΜΠΑΧΟΥ ΜΑΡΙΑ",null,null,null,null,null,null,null,null],[286,"ΠΕΤΡΟΠΟΥΛΟΥ ΚΩΝΣΤΑΝΤΙΝΑ",996595,"ΘΑΝΑΣΗΣ","152121103021/2/0","ΝΑΙ",null,null,null,null],[287,"ΓΙΑΝΝΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",1000332,null,null,"ΝΑΙ",null,null,null,null],[288,"ΝΤΑΝΑΣΗΣ ΑΣΚΟΤΙΡΗ",null,"ΘΑΝΑΣΗΣ",null,null,null,"πρεπει να αρχειοθετηθουν",null,"ΑΥΘ.453"],[289,"ΔΑΜΑ",1003832,null,"150191249001",null,null,null,null,"ΑΥΘ.300"],[290,"ΧΡΙΣΤΟΠΟΥΛΟΣ ΓΙΑΝΝΗΣ",null,null,null,"ΝΑΙ",null,null,null,null],[291,"ΣΕΪΝΤΗΣ ΘΕΟΔΩΡΟΣ",1403187,"ΘΑΝΑΣΗΣ","150350109002",null,null,null,null,"ΑΥΘ.545"],[292,"ΝΙΚΟΛΟΠΟΥΛΟΣ ΜΙΧΑΗΛ & ΔΙΟΝΥΣΙΑ",1013388,null,null,"ΝΑΙ",null,null,"ΝΑ ΠΕΡΑΣΤΟΥΝ ΟΙ ΟΡΙΖΟΝΤΙΕΣ","ΑΥΘ.544"],[293,"ΣΠΥΡΟΠΟΥΛΟΥ ΦΙΛΙΩ ΚΑΙ ΝΙΚΗ",264590,"ΘΑΝΑΣΗΣ","150190128001","ΝΑΙ",null,null,null,"ΑΥΘ.553"],[294,"ΘΩΜΟΠΟΥΛΟΥ ΚΟΥΡΟΥΤΑ",1016689,null,"150192817012/1/0","ΝΑΙ",null,null,null,null],[295,"ΗΛΙΟΠΟΥΛΟΣ (ΠΑΠΑΣ) ΑΝΑΛΗΨΗ",1018287,null,"150501902042","ΝΑΙ",null,null,null,null],[296,"ΝΙΚΟΛΟΠΟΥΛΟΥ ΠΑΝΑΓΙΩΤΑ(ΙΣΟΓΕΙΟ)",519271,"ΘΑΝΑΣΗΣ","150190505006","ΝΑΙ",null,null,"ΕΊΝΑΙ Ο ΙΔΙΟΣ ΦΑΚΕΛΟΣ ΜΕ ΤΟΝ 155","ΑΥΘ.554"],[297,"ΒΑΡΟΥΞΗ ΚΟΥΚΑΚΗ",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[298,"ΚΩΣΤΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ",null,null,"151910104014-151910402013","ΝΑΙ",null,null,null,null],[299,"ΕΛΙΣΣΑΙΟΠΟΥΛΟΣ ΠΑΝΑΓΙΩΤΗΣ",1044183,"ΘΑΝΑΣΗΣ","150195001009","ΝΑΙ",null,null,null,"ΑΥΘ.555"],[300,"ΤΣΟΥΚΑΛΑΣ ΑΝΔΡΕΑΣ",1029325,null,"152031404010",null,null,null,null,null],[301,"ΒΑΣΙΛΙΚΟΠΟΥΛΟΥ ΠΟΛΩΝΗ",null,null,"150194802283-150194802010","ΝΑΙ",null,null,null,null],[302,"ΠΑΠΑΓΕΩΡΓΙΟΥ ΓΕΩΡΓΙΟΣ",1030375,null,"150192523006","ΝΑΙ",null,null,null,null],[303,"ΚΟΡΙΖΗ ΒΑΣΙΛΙΚΗ",1072790,"ΘΑΝΑΣΗΣ","151778807006","ΝΑΙ",null,null,null,"ΑΥΘ.487"],[304,"ΣΤΑΣΙΝΟΠΟΥΛΟΣ ΑΝΤΩΝΗΣ",null,"ΘΑΝΑΣΗΣ","151778801003-150050315005","ΝΑΙ",null,null,null,"ΑΥΘ.558"],[305,"ΓΚΡΙΛΛΑ ΦΩΤΕΙΝΗ",1039246,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[306,"ΠΑΠΑΓΕΩΡΓΙΟΥ ΒΑΣΩ",null,null,"151661001038-150570503036-150571001070-150571001064","ΝΑΙ",null,null,null,"ΑΥΘ.225"],[307,"THEODOROPOULOS ANDREW",1041497,null,"150192628002","ΝΑΙ",null,"θα αρχειοθετηθει λογω κατατμησης",null,null],[308,"ΤΣΙΚΛΗΡΑ ΜΑΡΙΑ",1047391,null,"150191320001",null,null,null,null,null],[309,"ΚΑΡΡΑ ΜΑΙΡΗ",1052887,"ΘΑΝΑΣΗΣ","150190307005","ΝΑΙ",null,null,null,"ΑΥΘ.557"],[310,"ΣΓΟΥΡΟΣ ΠΑΝΑΓΙΩΤΗΣ",1051765,null,"151380902113","ΝΑΙ",null,null,null,null],[311,"ΤΣΕΚΟΣ ΒΑΣΙΛΗΣ",1053782,null,"150191505031","ΝΑΙ",null,null,null,null],[312,"ΑΘΑΝΑΣΟΠΟΥΛΟΥ ΧΡΙΣΤΙΝΑ (ΣΑΜΑΡΑΣ)",null,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[313,"ΝΙΚΟΛΟΠΟΥΛΟΥ ΜΑΡΓΑΡΙΤΑ ΛΕΥΚΟΧΩΡΙ",1054501,null,"151220104011",null,null,null,null,"ΑΥΘ.556"],[314,"ΜΗΝΙΩΤΑΚΗΣ",null,null,null,null,null,null,null,null],[315,"ΣΙΔΗΡΟΚΑΣΤΡΙΤΗ ΠΑΝΑΓΙΩΤΑ",1072766,"ΘΑΝΑΣΗΣ","151840309005","ΝΑΙ",null,null,null,null],[316,"ΚΡΑΛΛΗΣ ΜΟΥΣΕΙΟ (ΑΝΤΩΝΟΠΟΥΛΟΣ)",1057921,null,"150680301016","ΝΑΙ",null,null,null,null],[317,"ΤΣΕΚΟΥΡΑ ΒΑΡΘΟΛΟΜΙΟ- ΧΑΡΙΔΗΜΟΣ",null,null,"150400139021-150400139019","ΝΑΙ",null,null,"αρχειοθετηθηκαν τα αρχικα οικοπεδα λογω συνενωσης","ΑΥΘ.548"],[318,"ΠΑΠΑΔΟΠΟΥΛΟΥ ΠΑΝΑΓΙΩΤΑ",null,"ΘΑΝΑΣΗΣ","151320401012","ΝΑΙ",null,null,null,null],[319,"ΧΟΖΟΒΙΤΗΣ ΑΜΑΛΙΑΔΑ (ΒΑΣΙΛΕΙΟΥ)",1064276,null,"150191308006","ΝΑΙ",null,null,null,null],[320,"ΒΑΣΙΛΟΠΟΥΛΟΥ ΑΥΓΗ",1124637,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[321,"ΠΑΝΑΓΙΩΤΟΠΟΥΛΟΣ - ΤΕΦΑΝΗΣ",951714,null,"150190610002","ΝΑΙ",null,null,null,null],[322,"ΤΣΙΟΥΡΗΣ ΣΟΦΟΚΛΗΣ",1081894,null,"150350220010","ΝΑΙ",null,null,null,null],[323,"ΣΩΤΗΡΟΠΟΥΛΟΣ",1098199,"ΘΑΝΑΣΗΣ","150192308048","ΝΑΙ",null,null,null,null],[324,"ΝΙΚΟΣ ΖΩΗΣ",null,"ΘΑΝΑΣΗΣ","150190926002/0/39-151880603039",null,null,null,null,null],[325,"ΜΟΝΑΝΤΕΡΟΥ ΜΑΡΙΑ",1104540,null,"152030135057",null,null,null,null,"ΑΥΘ.563"],[326,"ΚΥΡΙΑΚΟΠΟΥΛΟΥ ΚΙΚΗ",220863,"ΘΑΝΑΣΗΣ","150190716009","ΝΑΙ",null,null,null,"ΑΥΘ.568"],[327,"ΣΙΔΗΡΟΚΑΣΤΡΙΤΗΣ ΒΑΣΙΛΗΣ",1105733,null,"151840106036","ΝΑΙ",null,null,null,"ΑΥΘ.570"],[328,"ΞΕΝΟΥ ΚΟΥΛΑ",null,null,"150194319019-150194103018","ΝΑΙ",null,null,null,null],[329,"ΚΑΒΟΥΚΛΗΣ ΕΜΜΑΝΟΥΗΛ",1112202,null,"150193116022","ΝΑΙ",null,null,null,"ΑΥΘ.564"],[330,"ΖΟΥΛΙΝΑΚΗ ΓΕΩΡΓΙΑ",365113,"ΘΑΝΑΣΗΣ","150190528013",null,null,null,"ΕΊΝΑΙ ΤΟ ΙΔΙΟ ΟΙΚΟΠΕΔΟ ΜΕ ΤΟ 95","ΑΥΘ.571"],[331,"CRETA AGROTICA",null,null,"150490903015-150490903003","ΝΑΙ",null,null,null,null],[332,"ΙΕΡΑ ΜΗΤΡΟΠΟΛΗ ΗΛΕΙΑΣ",1118209,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[333,"ΖΑΦΕΙΡΟΠΟΥΛΟΣ ΣΑΚΗΣ (ΠΥΡΓΟΣ)",523192,null,"151776708001/0/127","ΟΧΙ",null,null,null,"ΑΥΘ.565"],[334,"ΗΛΙΟΠΟΥΛΟΣ (ΜΠΑΤΑΛΟΣ)",1123960,null,"150190937004","ΝΑΙ",null,null,null,"ΑΥΘ.561"],[335,"ΚΑΡΑΧΑΛΙΟΥ ΔΗΜΗΤΡΑΚΟΠΟΥΛΟΥ ΕΥΘΑΛΙΑ",1125143,null,"150192524012","ΝΑΙ",null,null,null,"ΑΥΘ.291"],[336,"ΑΘΑΝΑΣΟΠΟΥΛΟΣ ΚΟΡΥΦΗ",1129333,null,"151001102015","ΝΑΙ",null,null,null,null],[337,"ΜΠΑΝΤΟΥΝΑ",null,null,"150194007025-150194012003","ΝΑΙ",null,null,null,null],[338,"ΚΟΚΚΑΛΙΑΡΗ ΕΙΡΗΝΗ",1143455,"ΘΑΝΑΣΗΣ","152120303006","ΝΑΙ",null,null,null,null],[339,"ΚΑΡΑΛΗΣ ΓΙΩΡΓΟΣ",1135553,null,null,"ΝΑΙ",null,null,null,null],[340,"ΜΠΡΑΒΟΣ ΧΡΗΣΤΟΣ",1135441,null,"150190642002/1/0","ΝΑΙ",null,null,null,null],[341,"ΣΥΡΙΟΠΟΥΛΟΥ ΑΡΙΣΤΕΑ",1156747,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[342,"ΓΙΑΝΝΟΠΟΥΛΟΥ ΚΑΤΕΡΙΝΑ (Β' ΟΡΟΦΟΣ)",395986,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,"ΑΥΘ.574"],[343,"ΠΕΤΡΟΥΤΣΟΥ ΣΩΤΗΡΙΑ",1144941,"ΘΑΝΑΣΗΣ","151110501039","ΝΑΙ",null,null,null,null],[344,"ΛΥΜΠΕΡΗΣ ΓΙΑΝΝΗΣ",null,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[345,"ΔΙΑΜΑΝΤΗ ΙΩΑΝΝΑ",null,null,"150190531009-150190531015","ΝΑΙ",null,null,null,null],[346,"ΤΣΑΜΗΣ ΠΕΤΡΟΣ",null,null,"152030508001-152030508005-152030508006-152030508010","ΝΑΙ",null,null,null,null],[347,"ΚΟΥΡΗΣ",1223210,null,"150190832007","ΝΑΙ",null,null,null,null],[348,"ΑΒΔΙΚΟΣ ΝΙΚΟΛΑΟΣ",1156684,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[349,"ΜΑΥΡΟΜΜΑΤΗΣ",null,"ΘΑΝΑΣΗΣ","152010502063-152010501075-152010502062-152010502010","ΝΑΙ",null,null,null,"ΑΥΘ.221"],[350,"ΜΠΡΙΤΣΑΣ",1158246,null,"150193908019",null,null,null,null,null],[351,"ΕΥΘΥΜΙΟΠΟΥΛΟΣ (ΚΟΥΡΕΑΣ)",1166495,null,"150194401162","ΟΧΙ",null,null,null,"ΑΥΘ.552"],[352,"ΑΝΑΓΝΩΣΤΟΠΟΥΛΟΣ ΠΑΝΑΓΙΩΤΗΣ",1167863,"ΘΑΝΑΣΗΣ","150190842007",null,null,null,null,"ΑΥΘ.573 ΚΑΙ 566"],[353,"ΣΟΥΛΗΣ ΒΑΣΙΛΗΣ",1172301,null,"150501401003","ΝΑΙ",null,null,null,null],[354,"ΓΙΑΛΠΑΣ",1173417,"ΘΑΝΑΣΗΣ","150570103006","ΝΑΙ",null,null,null,"ΑΥΘ.409"],[355,"ΚΩΝΣΤΑΝΤΟΠΟΥΛΟΣ ΣΠΥΡΟΣ",455142,null,"150190634002","ΝΑΙ",null,null,null,"ΑΥΘ.259"],[356,"ΠΕΤΡΟΠΟΥΛΟΥ ΓΕΩΡΓΙΑ",null,"ΘΑΝΑΣΗΣ","152120802008-'152121141001","ΝΑΙ",null,null,null,"ΑΥΘ.541"],[357,"ΑΝΑΓΝΩΣΤΟΠΟΥΛΟΥ ΜΑΡΓΑΡΙΤΑ",null,null,"150660512012","ΝΑΙ",null,null,null,null],[358,"ΒΑΣΙΛΟΠΟΥΛΟΣ ΓΡΗΓΟΡΗΣ",null,null,"150192512001-150192516001","ΝΑΙ",null,null,null,null],[359,"ΚΛΑΔΗ ΡΕΒΕΚΑ",1189644,"ΘΑΝΑΣΗΣ","150190835004",null,null,null,null,"ΑΥΘ.579"],[360,"ΞΕΝΟΣ",null,null,"151840339006-151840339001","ΝΑΙ",null,null,null,null],[361,"ΠΑΠΑΝΔΡΙΚΟΠΟΥΛΟΣ (ΚΡΟΕΛΑ)",1191188,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.578"],[362,"ΦΟΥΝΤΑΣ ΣΤΑΥΡΟΣ",1186990,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,"εχουν δημιουργηθει οριζοντιες,",null],[363,"ΒΛΑΣΣΟΠΟΥΛΟΥ ΜΑΡΙΑ",1194036,"ΘΑΝΑΣΗΣ","150780209020","ΝΑΙ",null,null,null,null],[364,"ΑΣΤΕΡΗ (ΑΜΑΛΙΑΔΑ)",1193523,null,"150191037004","ΝΑΙ",null,null,null,"ΑΥΘ.258"],[365,"ΠΑΝΑΓΙΩΤΟΠΟΥΛΟΣ (ΛΙΩΣΗ)",1191081,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.580"],[366,"ΚΟΡΙΖΗΣ ΚΟΥΡΟΥΤΑ",1195329,"ΘΑΝΑΣΗΣ","150192817022",null,null,null,null,null],[367,"ΤΣΕΤΣΕΛΗ ΠΑΤΡΑ",816743,null,"061672828014","ΝΑΙ",null,null,null,null],[368,"ΓΙΑΝΝΟΥΛΟΠΟΥΛΟΥ ΤΡΙΣΕΥΓΕΝΗ",1195350,"ΘΑΝΑΣΗΣ","152120204007",null,null,null,null,null],[369,"ΣΙΑΧΑΜΗ ΚΩΝΣΤΑΝΤΙΝΑ",1195613,"ΘΑΝΑΣΗΣ","152120602012","ΝΑΙ",null,null,null,null],[370,"ΚΑΛΗΜΕΡΗΣ- ΜΑΣΟΥΡΑΣ",1201217,null,"151840217012","ΝΑΙ",null,null,null,null],[371,"ΜΠΡΙΤΣΑΣ ΑΜΠΕΛΟΚΑΜΠΟΣ",null,null,"150200325001-150200325007","ΝΑΙ",null,null,null,null],[372,"ΠΑΠΑΔΑΚΟΣ",null,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[373,"ΤΡΑΠΕΖΑ ΠΕΙΡΑΙΩΣ",1213925,"ΘΑΝΑΣΗΣ","150490531001","ΝΑΙ",null,null,null,"ΑΥΘ.582"],[374,"ΠΑΠΑΓΕΩΡΓΙΟΥ ΓΕΩΡΓΙΟΣ",1214428,null,"150192525001","ΝΑΙ",null,null,null,null],[375,"ΚΑΡΑΒΕΛΑΣ",null,null,"150940312003-150570304004","ΝΑΙ",null,null,null,null],[376,"ΑΓΙΟΣ ΓΕΩΡΓΙΟΣ",1218265,null,"150194204015",null,null,null,null,null],[377,"ΓΕΩΡΓΑΚΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",1219420,null,"150193610011","ΝΑΙ",null,null,null,null],[378,"ΔΑΛΑΒΟΥΡΑΣ ΚΩΝΣΤΑΝΤΙΝΟΣ",null,null,"150660510032-150660510002","ΝΑΙ",null,null,null,null],[379,"ΔΡΙΒΕΛΑΣ",1225053,null,"150194210013","ΝΑΙ",null,null,null,null],[380,"ΚΟΤΣΙΡΩΝΗΣ ΔΗΜΗΤΡΙΟΣ",1226102,null,"151000108005","ΝΑΙ",null,null,null,null],[381,"ΤΣΕΤΣΕΛΗ ΑΜΑΛΙΑΔΑ",1226214,null,"150193818036","ΝΑΙ",null,null,null,null],[382,"ΚΑΘΟΛΙΚΗ ΓΑΣΤΟΥΝΗΣ",null,"ΘΑΝΑΣΗΣ","150490146008-150490146013","ΝΑΙ",null,null,null,"ΑΥΘ.583"],[383,"ΡΟΚΑΝΑΣ (ΠΑΠΑΣΤΑΘΟΠΟΥΛΟΣ)",1227305,null,"150192604007","ΝΑΙ",null,null,null,null],[384,"ΚΟΛΟΤΟΥΡΟΣ ΓΙΩΡΓΟΣ",1343516,"ΘΑΝΑΣΗΣ","150190934002","ΝΑΙ",null,null,"αρχειοθετηθηκε η αρχικη ιδιοκτησια λογω οριζοντιων","ΑΥΘ.577"],[385,"ΜΠΡΙΤΣΑΣ-ΔΗΜΟΠΟΥΛΟΣ",null,null,"150200325006-150200325003","ΝΑΙ",null,null,null,null],[386,"ΓΙΑΝΝΟΠΟΥΛΟΥ ΑΘΑΝΑΣΙΑ (ΚΑΡΑΜΑΝΟΣ)",null,null,"150350407077-150350308021-150350308093","ΝΑΙ",null,null,null,null],[387,"ΠΕΤΡΟΠΟΥΛΟΥ (ΣΤΑΥΡΟΥΛΙΑΣ)",1564326,null,"150195202096","ΝΑΙ",null,null,null,null],[388,"ΑΘΑΝΑΣΟΠΟΥΛΟΥ ΜΑΡΙΑ",1254531,"ΘΑΝΑΣΗΣ","152121147010",null,null,null,null,"ΑΥΘ.591"],[389,"ΝΙΝΟΠΟΥΛΟΣ ΙΩΑΝΝΗΣ",null,null,null,null,null,null,null,"ΑΥΘ.288"],[390,"ΔΟΥΚΑ ΑΓ.ΔΗΜΗΤΡΙΟΣ",1250745,"ΘΑΝΑΣΗΣ","150060715050","ΝΑΙ",null,null,null,null],[391,"ΛΙΑΡΟΠΟΥΛΟΣ ΧΡΗΣΤΟΣ ΤΡΑΓΑΝΟ",1256891,null,"152031503036","ΝΑΙ",null,null,null,null],[392,"ΓΙΑΝΝΟΠΟΥΛΟΣ ΑΥΓΕΙΟ (ΚΑΝΕΛΛΟΠΟΥΛΟΣ)",1258574,"ΘΑΝΑΣΗΣ","150350213009",null,null,null,null,null],[393,"ΚΟΛΟΒΟΣ (ΠΑΠΑΝΑΣΤΑΣΗΣ)",1258338,null,null,"ΝΑΙ",null,null,null,"ΑΥΘ.586"],[394,"ΜΠΟΥΝΤΟΥΒΗΣ ΓΕΩΡΓΙΟΣ",1269082,null,"150940106042","ΝΑΙ",null,null,null,"ΑΥΘ.575"],[395,"ΜΗΤΡΟΠΟΛΗ ΨΑΡΙ",1269456,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,null],[396,"ΓΙΑΝΝΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ ΤΡΑΓΑΝΟ",1271502,"ΘΑΝΑΣΗΣ","150232101043",null,null,null,null,null],[397,"ΤΕΜΠΟΝΕΡΑΣ ΠΑΛΟΥΚΙ",1271640,null,"150192624004","ΝΑΙ",null,null,null,null],[398,"ΚΑΤΣΗΣ ΗΛΙΑΣ",1387637,"ΘΑΝΑΣΗΣ","150192302080","ΝΑΙ",null,null,null,null],[399,"ΓΚΑΤΖΟΥΝΑ ΜΑΡΙΑ ΔΗΜΗΤΡΑ",1238682,null,"151840112004","ΝΑΙ",null,null,null,null],[400,"ΛΑΖΑΡΗ ΑΝΑΣΤΑΣΙΑ",1290281,"ΘΑΝΑΣΗΣ","150660112013","ΝΑΙ",null,null,null,"ΑΥΘ.593"],[401,"ΚΑΠΗ ΓΑΣΤΟΥΝΗΣ",1289779,"ΘΑΝΑΣΗΣ","150490401007","ΝΑΙ",null,null,null,"ΑΥΘ.588"],[402,"ΒΑΣΙΛΟΠΟΥΛΟΣ ΒΑΣΙΛΗΣ",null,"ΘΑΝΑΣΗΣ","152120402011-152120402005","ΝΑΙ",null,null,null,"ΑΥΘ.598"],[403,"ΠΑΠΑΛΕΩΝΙΔΑΣ",1291222,null,"150191132004","ΝΑΙ",null,null,null,null],[404,"ΓΙΑΛΑΜΑ ΓΛΥΦΑ",1361293,null,"151290211008","ΝΑΙ",null,null,null,"ΑΥΘ.608"],[405,"ΕΛΕΥΘΕΡΙΟΥ ΣΤΑΣΙΝΟΠΟΥΛΟΣ",1298800,"ΘΑΝΑΣΗΣ","151777007006","ΝΑΙ",null,null,null,"ΑΥΘ.590"],[406,"ΝΤΑΝΑΣΗΣ ΓΕΩΡΓΙΟΣ",null,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[407,"ΤΣΑΓΓΑΡΟΥΛΙΑΣ ΠΑΝΑΓΙΩΤΗΣ",null,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[408,"ΔΗΜΗΤΡΑΚΟΠΟΥΛΟΣ ΜΕΡΕ",1306399,null,"150192524015","ΝΑΙ",null,null,null,null],[409,"ΚΟΚΟΛΑΡΑ ΚΑΤΩ ΠΑΝΑΓΙΑ",1317335,"ΘΑΝΑΣΗΣ","150900113005","ΝΑΙ",null,null,null,null],[410,"ΜΑΡΑΖΙΩΤΗΣ",null,"ΘΑΝΑΣΗΣ","150350408060-150350408054",null,null,"ΠΛΗΡΩΜΕΝΗ",null,null],[411,"ΒΥΘΟΥΛΚΑΣ",1316734,"ΘΑΝΑΣΗΣ","150190907002","ΝΑΙ",null,null,null,null],[412,"ΝΙΚΟΛΟΠΟΥΛΟΣ ΧΑΒΑΡΙ",1329480,"ΘΑΝΑΣΗΣ","152121151006","ΝΑΙ",null,null,null,null],[413,"ΠΕΤΡΟΠΟΥΛΟΣ ΚΑΛΥΒΙΑ",1347042,"ΘΑΝΑΣΗΣ",null,"ΝΑΙ",null,null,null,"ΑΥΘ.604"],[414,"ΣΚΟΥΤΕΡΗΣ ΣΩΣΤΙ",1347390,"ΘΑΝΑΣΗΣ","152010120001",null,null,null,null,"ΑΥΘ.603"],[415,"ΚΟΥΡΑΧΑΝΗ",1331285,null,"151110404008",null,null,null,null,null],[416,"ΡΟΚΑΝΑΣ ΚΟΥΡΟΥΤΑ",1330612,null,"150192830004","ΝΑΙ",null,null,null,null],[417,"ΑΘΑΝΑΣΟΠΟΥΛΟΣ ΚΑΡΔΑΜΑΣ (ΝΙΚΗ)",1345268,"ΘΑΝΑΣΗΣ","150840139003",null,null,null,null,"ΑΥΘ.538"],[418,"ΑΓΓΕΛΟΠΟΥΛΟΣ ΔΗΜΗΤΡΙΟΣ",1350155,null,"150193608001","ΝΑΙ",null,null,null,null],[419,"ΣΠΗΛΙΟΠΟΥΛΟΣ ΚΩΣΤΑΣ",1338062,"ΘΑΝΑΣΗΣ","150194313026","ΝΑΙ",null,null,null,null],[420,"ΣΤΑΥΡΟΥΛΙΑΣ (ΠΕΤΡΟΠΟΥΛΟΥ)",1345632,null,"152120106074","ΝΑΙ",null,null,null,null],[421,"ΜΠΟΖΙΚΗ ΞΥΛΟΚΕΡΑ (ΖΑΚΥΝΘΟΣ)",1387573,"ΘΑΝΑΣΗΣ","151590511026",null,null,null,null,null],[422,"ΚΥΡΙΑΚΟΠΟΥΛΟΣ ΚΟΥΡΟΥΤΑ",1361632,null,"150192824010","ΝΑΙ",null,null,null,null],[423,"ΔΟΥΜΟΥΡΑΣ",228759,null,"150190508010","ΝΑΙ",null,null,null,"ΑΥΘ.184"],[424,"ΜΑΛΛΙΑΡΗΣ",null,null,null,null,null,null,null,"ΑΥΘ.609"],[425,"ΚΑΡΑΚΟΥΛΗ ΝΤΙΑΝΑ ΚΑΙ ΝΙΚΟΛΙΤΣΑ",1376491,null,"150190428005","ΝΑΙ",null,null,null,"ΑΥΘ.534 ΚΑΙ 449"],[426,"ΤΖΟΥΤΖΟΥΚΟΣ (ΠΑΝΑΓΙΩΤΟΠΟΥΛΟΣ ΝΙΚΟΣ)",1377947,null,"152030605011","ΝΑΙ",null,null,null,"ΑΥΘ.610"],[427,"ΚΑΡΑΝΤΖΑ",null,null,"150191408135-150191408138","ΝΑΙ",null,null,null,null],[428,"ΚΟΥΡΤΕΣΗ ΠΑΝΩΡΑΙΑ",null,"ΘΑΝΑΣΗΣ","150190926009-'150190926007",null,null,null,null,"ΑΥΘ.147 ΚΑΙ 600"],[429,"ΠΑΡΑΣΚΕΥΟΠΟΥΛΟΣ ΣΚΛΙΒΑ",null,null,null,"ΝΑΙ",null,null,null,null],[430,"ΛΑΒΑΖΟΣ-ΜΑΡΓΑΡΗΣ",1388544,null,"151001103004","ΝΑΙ",null,null,null,null],[431,"ΑΡΒΑΝΙΤΗΣ ΗΛΙΑΣ",264590,"ΘΑΝΑΣΗΣ","150190128001/0/79",null,null,null,null,"ΑΥΘ.613"],[432,"ΤΑΤΑΝΗΣ ΝΙΚΟΛΑΟΣ",1395686,null,"150193814011",null,null,null,null,null],[433,"ΡΟΥΝΗΣ ΑΛΕΞΑΝΔΡΟΣ",1395828,"ΘΑΝΑΣΗΣ","152121103027",null,null,null,null,"ΑΥΘ.601"],[434,"ΜΑΝΕΤΑΣ ΔΙΟΝΥΣΙΟΣ",1397422,"ΘΑΝΑΣΗΣ","152120105011","ΝΑΙ",null,null,null,"ΑΥΘ.589"],[435,"ΝΙΚΟΛΑΚΟΠΟΥΛΟΣ ΒΑΣΙΛΕΙΟΣ",1401442,"ΘΑΝΑΣΗΣ","152121111007",null,null,null,null,"ΑΥΘ.606"],[436,"ΔΗΜΗΤΡΟΠΟΥΛΟΣ ΚΩΝΣΤΑΝΤΙΝΟΣ",1404261,"ΘΑΝΑΣΗΣ","152120102015",null,null,"ΠΑΓΩΣΕ",null,null],[437,"ΛΥΚΟΥΣΗΣ",1408042,null,"151790402002","ΝΑΙ",null,null,null,"ΑΥΘ.612"],[438,"ΜΟΥΣΤΟΠΟΥΛΟΣ ΠΑΝΑΓΙΩΤΟΠΟΥΛΟΣ",1413397,null,"152030609010","ΝΑΙ",null,null,null,"ΑΥΘ.618"],[439,"ΝΑΡΝΟΣ ΓΡΑΦΕΙΑ",null,null,null,null,null,null,null,null],[440,"ΑΘΑΝΑΣΟΠΟΥΛΟΥ ΗΛΙΑΝΑ",1422464,null,null,null,null,null,null,"ΑΥΘ.597"],[441,"ΞΕΝΟΣ ΣΑΒΑΛΙΑ",1421104,null,"151840339005",null,null,"ΣΕ ΟΡΙΣΤΙΚΗ",null,"ΑΥΘ.619"],[442,"ΤΣΟΥΚΑ",1419737,null,"151130403026","ΝΑΙ",null,null,null,null],[443,"ΦΛΕΒΟΤΟΜΟΥ ΚΕΡΑΝΗ",1429690,null,"150192636002",null,null,null,null,"ΑΥΘ.611"],[444,"ΝΙΚΟΛΟΠΟΥΛΟΥ ΙΩΑΝΝΑ",1449479,null,"150190925002.0","ΝΑΙ",null,null,null,null],[445,"ΔΟΥΜΟΥΡΑ ΕΛΕΝΗ & ΖΑΜΠΕΤΑΚΗ ΟΥΡΑΝΙΑ",1450656,null,"150193619018.0","ΟΧΙ",null,null,null,"ΑΥΘ.228"],[446,"ΦΩΤΟΠΟΥΛΟΥ-ΜΠΙΡΜΠΑΣ",1456261,null,"151840207007","ΝΑΙ",null,null,null,null],[447,"ΓΚΡΙΛΛΑΣ ΕΛΙΣΣΑΙΟΣ (ΜΠΑΚΑΣ-ΡΕΚΕΣ)",null,"ΘΑΝΑΣΗΣ","152120209005-152120209009",null,null,null,null,null],[448,"ΜΠΑΛΗ ΑΓΝΗ- ΠΟΛΥΧΡΟΝΟΠΟΥΛΟΥ ΖΩΗ",1467326,null,"151790402006","ΝΑΙ",null,null,null,null],[449,"ΓΙΑΝΝΑΚΟΠΟΥΛΟΣ ΑΡΚΟΥΔΙ",1341584,null,"151290415001",null,null,null,null,"ΑΥΘ.67"],[450,"ΑΝΔΡΟΥΤΣΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ",null,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null],[451,"ΝΤΑΝΑΣΗΣ ΚΩΝΣΤΑΝΤΙΝΟΣ",null,"ΘΑΝΑΣΗΣ",null,null,null,null,null,null]]</script>
+<script>
+(function(){
+  'use strict';
+
+  /* ---------------- Storage backend detection ----------------
+     Inside Claude.ai, window.storage is provided natively.
+     Outside it (local file, GitHub Pages, etc.) it does not exist,
+     so we polyfill the same async interface on top of localStorage
+     whenever it's safely usable. If neither is available, the app
+     still works fully — it just won't remember additions/edits
+     between visits. */
+  var STORAGE_BACKEND = 'none';
+  if (window.storage && window.storage.get && window.storage.set) {
+    STORAGE_BACKEND = 'claude';
+  } else {
+    try {
+      var probeKey = '__building_id_tool_probe__';
+      window.localStorage.setItem(probeKey, '1');
+      window.localStorage.removeItem(probeKey);
+      var NS = 'building-id-tool:';
+      window.storage = {
+        get: function(key, shared){
+          return new Promise(function(resolve, reject){
+            try {
+              var v = window.localStorage.getItem(NS + (shared ? 'shared:' : 'priv:') + key);
+              if (v === null) { reject(new Error('key not found')); return; }
+              resolve({ key: key, value: v, shared: !!shared });
+            } catch(e){ reject(e); }
+          });
+        },
+        set: function(key, value, shared){
+          return new Promise(function(resolve, reject){
+            try {
+              window.localStorage.setItem(NS + (shared ? 'shared:' : 'priv:') + key, value);
+              resolve({ key: key, value: value, shared: !!shared });
+            } catch(e){ reject(e); }
+          });
+        },
+        delete: function(key, shared){
+          return new Promise(function(resolve){
+            window.localStorage.removeItem(NS + (shared ? 'shared:' : 'priv:') + key);
+            resolve({ key: key, deleted: true, shared: !!shared });
+          });
+        },
+        list: function(prefix, shared){
+          return new Promise(function(resolve){
+            var pfx = NS + (shared ? 'shared:' : 'priv:') + (prefix || '');
+            var keys = [];
+            for (var i = 0; i < window.localStorage.length; i++) {
+              var k = window.localStorage.key(i);
+              if (k.indexOf(pfx) === 0) keys.push(k.slice(NS.length + (shared?7:5)));
+            }
+            resolve({ keys: keys, prefix: prefix, shared: !!shared });
+          });
+        }
+      };
+      STORAGE_BACKEND = 'local';
+    } catch(e) {
+      STORAGE_BACKEND = 'none';
+    }
+  }
+
+  /* ---------------- Load baked dataset ----------------
+     Each row: [fileNo, owner, plotNo, handler, kaek, certificate, certNote, pending, archived, comments] */
+  var ROWS = JSON.parse(document.getElementById('building-id-data').textContent);
+
+  var records = new Array(ROWS.length);
+  for (var i = 0; i < ROWS.length; i++) {
+    var r = ROWS[i];
+    records[i] = {
+      id: 'b' + i,
+      fileNo: r[0], owner: r[1], plotNo: r[2], handler: r[3], kaek: r[4],
+      certificate: r[5], certNote: r[6], pending: r[7], archived: r[8], comments: r[9],
+      _origin: 'base'
+    };
+  }
+
+  var ROW_HEIGHT = 40;
+  var STORAGE_KEY = 'building-id-overrides';
+
+  /* ---------------- Greek-aware normalization for search/sort ---------------- */
+  function norm(s){
+    if (!s) return '';
+    return s.toString().toLowerCase()
+      .replace(/[άα]/g,'α').replace(/[έε]/g,'ε').replace(/[ήη]/g,'η')
+      .replace(/[ίϊΐι]/g,'ι').replace(/[όο]/g,'ο').replace(/[ύϋΰ]/g,'υ')
+      .replace(/[ώω]/g,'ω').replace(/ς/g,'σ');
+  }
+  function buildBlob(rec){
+    return norm([rec.fileNo, rec.owner, rec.plotNo, rec.handler, rec.kaek, rec.certNote, rec.pending, rec.archived, rec.comments].join(' '));
+  }
+  for (var j = 0; j < records.length; j++) records[j]._s = buildBlob(records[j]);
+
+  var recordsById = new Map();
+  for (var k = 0; k < records.length; k++) recordsById.set(records[k].id, records[k]);
+
+  var addCounter = 0;
+
+  /* ---------------- Persistent overrides (window.storage) ---------------- */
+  var overrides = { edits: {}, deletes: [], adds: [] };
+  var storageOk = STORAGE_BACKEND !== 'none';
+
+  function setStorageStatus(text){
+    var el = document.getElementById('storageState');
+    if (el) el.textContent = 'Τοπική αποθήκευση: ' + text;
+  }
+  function backendLabel(){
+    return STORAGE_BACKEND === 'claude' ? ' (μέσω Claude)' : STORAGE_BACKEND === 'local' ? ' (στον browser)' : '';
+  }
+
+  function persistOverrides(){
+    if (!storageOk) { setStorageStatus('μη διαθέσιμη σε αυτό το περιβάλλον'); return; }
+    window.storage.set(STORAGE_KEY, JSON.stringify(overrides), false)
+      .then(function(){ setStorageStatus('ενεργή' + backendLabel() + ' · αποθηκεύτηκε'); })
+      .catch(function(){ setStorageStatus('σφάλμα αποθήκευσης'); });
+  }
+
+  function applyOverrides(ov){
+    // edits
+    Object.keys(ov.edits || {}).forEach(function(id){
+      var rec = recordsById.get(id);
+      if (rec) {
+        Object.assign(rec, ov.edits[id]);
+        rec._edited = true;
+        rec._s = buildBlob(rec);
+      }
+    });
+    // deletes
+    (ov.deletes || []).forEach(function(id){
+      var rec = recordsById.get(id);
+      if (rec) rec._deleted = true;
+    });
+    // adds
+    (ov.adds || []).forEach(function(rec){
+      rec._origin = 'user';
+      rec._s = buildBlob(rec);
+      records.push(rec);
+      recordsById.set(rec.id, rec);
+      var num = parseInt(rec.id.replace('u',''), 10);
+      if (!isNaN(num) && num >= addCounter) addCounter = num + 1;
+    });
+  }
+
+  function loadOverridesAndInit(){
+    if (!storageOk) { setStorageStatus('μη διαθέσιμη σε αυτό το περιβάλλον'); afterDataReady(); return; }
+    window.storage.get(STORAGE_KEY, false).then(function(res){
+      if (res && res.value) {
+        try {
+          var parsed = JSON.parse(res.value);
+          overrides = Object.assign({edits:{}, deletes:[], adds:[]}, parsed);
+          applyOverrides(overrides);
+          var n = Object.keys(overrides.edits).length + overrides.deletes.length + overrides.adds.length;
+          setStorageStatus('ενεργή' + backendLabel() + ' · ' + n + ' αποθηκευμένες αλλαγές');
+        } catch(e){ setStorageStatus('ενεργή' + backendLabel() + ' · χωρίς αλλαγές'); }
+      } else {
+        setStorageStatus('ενεργή' + backendLabel() + ' · χωρίς αλλαγές');
+      }
+      afterDataReady();
+    }).catch(function(){
+      setStorageStatus('ενεργή' + backendLabel() + ' · χωρίς αλλαγές');
+      afterDataReady();
+    });
+  }
+
+  /* ---------------- Filter state ---------------- */
+  var state = {
+    q: '', cert: '', handler: '', status: '',
+    sortField: 'fileNo', sortDir: 'asc'
+  };
+  var filtered = [];
+
+  function liveRecords(){
+    var out = [];
+    for (var i = 0; i < records.length; i++) if (!records[i]._deleted) out.push(records[i]);
+    return out;
+  }
+
+  function computeFiltered(){
+    var q = norm(state.q);
+    var qTerms = q.split(/\s+/).filter(Boolean);
+    var out = [];
+    var src = liveRecords();
+    for (var i = 0; i < src.length; i++) {
+      var rec = src[i];
+      if (state.cert && (rec.certificate || '') !== state.cert) continue;
+      if (state.handler && (rec.handler || '') !== state.handler) continue;
+      if (state.status === 'pending' && !rec.pending) continue;
+      if (state.status === 'archived' && !rec.archived) continue;
+      if (qTerms.length) {
+        var ok = true;
+        for (var t = 0; t < qTerms.length; t++) {
+          if (rec._s.indexOf(qTerms[t]) === -1) { ok = false; break; }
+        }
+        if (!ok) continue;
+      }
+      out.push(rec);
+    }
+    return out;
+  }
+
+  function sortFiltered(){
+    var f = state.sortField, d = state.sortDir === 'asc' ? 1 : -1;
+    filtered.sort(function(a,b){
+      var av = a[f], bv = b[f];
+      if (f === 'fileNo' || f === 'plotNo') {
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return (av - bv) * d;
+      }
+      av = (av || ''); bv = (bv || '');
+      return av.toString().localeCompare(bv.toString(), 'el') * d;
+    });
+  }
+
+  function refresh(){
+    filtered = computeFiltered();
+    sortFiltered();
+    renderResultLine();
+    renderCertBars();
+    renderTable(true);
+    updateHeaderStats();
+  }
+
+  /* ---------------- Header stats ---------------- */
+  function updateHeaderStats(){
+    var live = liveRecords();
+    document.getElementById('statTotal').textContent = live.length.toLocaleString('el-GR');
+    document.getElementById('statCert').textContent = live.filter(function(r){return r.certificate === 'ΝΑΙ';}).length.toLocaleString('el-GR');
+    document.getElementById('statPending').textContent = live.filter(function(r){return !!r.pending;}).length.toLocaleString('el-GR');
+    document.getElementById('statArchived').textContent = live.filter(function(r){return !!r.archived;}).length.toLocaleString('el-GR');
+  }
+
+  function renderResultLine(){
+    var live = liveRecords();
+    var el = document.getElementById('resultCount');
+    if (filtered.length === live.length) {
+      el.innerHTML = '<b>' + filtered.length.toLocaleString('el-GR') + '</b> εγγραφές';
+    } else {
+      el.innerHTML = '<b>' + filtered.length.toLocaleString('el-GR') + '</b> από ' + live.length.toLocaleString('el-GR') + ' εγγραφές';
+    }
+    var arrows = document.querySelectorAll('.arrow');
+    arrows.forEach(function(a){ a.textContent = ''; });
+    var active = document.querySelector('[data-arrow="' + state.sortField + '"]');
+    if (active) active.textContent = state.sortDir === 'asc' ? '▲' : '▼';
+  }
+
+  /* ---------------- Certificate status bar (signature element) ---------------- */
+  var CERT_ORDER = ['ΝΑΙ', 'ΠΡΟΣΩΡΙΝΗ ΕΚΤΥΠΩΣΗ', 'ΟΧΙ', '—'];
+  function renderCertBars(){
+    var live = liveRecords();
+    var counts = {};
+    live.forEach(function(r){
+      var key = r.certificate || '—';
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    var keys = CERT_ORDER.filter(function(k){ return counts[k]; });
+    if (!keys.length) { document.getElementById('timelineBox').style.display = 'none'; return; }
+    var max = Math.max.apply(null, keys.map(function(k){return counts[k];}));
+    var box = document.getElementById('timelineBars');
+    box.innerHTML = '';
+    keys.forEach(function(key){
+      var pct = Math.max(4, Math.round((counts[key] / max) * 100));
+      var bar = document.createElement('div');
+      bar.className = 'tbar' + (state.cert === key ? ' active' : (state.cert !== '' ? ' dim' : ''));
+      bar.title = counts[key].toLocaleString('el-GR') + ' φάκελοι — ' + key;
+      bar.innerHTML = '<div class="fill" style="height:' + pct + '%"></div><div class="dlbl">' + esc(key) + '<br>' + counts[key] + '</div>';
+      bar.addEventListener('click', function(key){
+        return function(){
+          if (key === '—') return;
+          state.cert = (state.cert === key) ? '' : key;
+          document.getElementById('certFilter').value = state.cert;
+          refresh();
+          document.getElementById('certClear').className = 't-clear' + (state.cert !== '' ? ' show' : '');
+        };
+      }(key));
+      box.appendChild(bar);
+    });
+  }
+
+  /* ---------------- Virtualized table ---------------- */
+  var scrollArea = document.getElementById('scrollArea');
+  var spacer = document.getElementById('spacer');
+  var viewport = document.getElementById('viewport');
+  var emptyState = document.getElementById('emptyState');
+
+  function esc(s){
+    if (s == null) return '';
+    return s.toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function certBadgeClass(cert){
+    if (cert === 'ΝΑΙ') return 'cat-badge badge-yes';
+    if (cert === 'ΟΧΙ') return 'cat-badge badge-no';
+    if (cert === 'ΠΡΟΣΩΡΙΝΗ ΕΚΤΥΠΩΣΗ') return 'cat-badge badge-pending';
+    return 'cat-badge';
+  }
+
+  function rowHtml(rec){
+    var cls = 't-row' + (rec._origin === 'user' ? ' new-row' : (rec._edited ? ' edited-row' : ''));
+    return '<div class="' + cls + '" data-id="' + rec.id + '">' +
+      '<div class="c-file mono">' + esc(rec.fileNo != null ? rec.fileNo : '—') + '</div>' +
+      '<div class="c-plot mono">' + esc(rec.plotNo != null ? rec.plotNo : '—') + '</div>' +
+      '<div class="c-owner" title="' + esc(rec.owner) + '">' + esc(rec.owner || '—') + '</div>' +
+      '<div class="c-kaek" title="' + esc(rec.kaek) + '">' + esc(rec.kaek || '—') + '</div>' +
+      '<div class="c-cert"><span class="' + certBadgeClass(rec.certificate) + '">' + esc(rec.certificate || '—') + '</span></div>' +
+      '<div class="c-go">›</div>' +
+      '</div>';
+  }
+
+  function renderTable(resetScroll){
+    if (resetScroll) scrollArea.scrollTop = 0;
+    if (!filtered.length) {
+      spacer.style.height = '0px';
+      viewport.innerHTML = '';
+      emptyState.style.display = 'block';
+      return;
+    }
+    emptyState.style.display = 'none';
+    spacer.style.height = (filtered.length * ROW_HEIGHT) + 'px';
+    renderVisible();
+  }
+
+  function renderVisible(){
+    if (!filtered.length) return;
+    var scrollTop = scrollArea.scrollTop;
+    var viewH = scrollArea.clientHeight;
+    var start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 8);
+    var end = Math.min(filtered.length, Math.ceil((scrollTop + viewH) / ROW_HEIGHT) + 8);
+    var html = '';
+    for (var i = start; i < end; i++) html += rowHtml(filtered[i]);
+    viewport.style.transform = 'translateY(' + (start * ROW_HEIGHT) + 'px)';
+    viewport.innerHTML = html;
+  }
+
+  var scrollTicking = false;
+  scrollArea.addEventListener('scroll', function(){
+    if (!scrollTicking) {
+      requestAnimationFrame(function(){ renderVisible(); scrollTicking = false; });
+      scrollTicking = true;
+    }
+  });
+  window.addEventListener('resize', function(){ renderVisible(); });
+
+  viewport.addEventListener('click', function(e){
+    var row = e.target.closest('.t-row');
+    if (row) openDetail(row.getAttribute('data-id'));
+  });
+
+  /* ---------------- Filter UI wiring ---------------- */
+  var searchInput = document.getElementById('searchInput');
+  var searchTimer = null;
+  searchInput.addEventListener('input', function(){
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function(){ state.q = searchInput.value; refresh(); }, 180);
+  });
+
+  var certFilter = document.getElementById('certFilter');
+  var handlerFilter = document.getElementById('handlerFilter');
+  var statusFilter = document.getElementById('statusFilter');
+  function populateFilterSelects(){
+    var live = liveRecords();
+    var certCounts = {}, handlerCounts = {};
+    live.forEach(function(r){
+      if (r.certificate) certCounts[r.certificate] = (certCounts[r.certificate]||0)+1;
+      if (r.handler) handlerCounts[r.handler] = (handlerCounts[r.handler]||0)+1;
+    });
+    var certKeys = Object.keys(certCounts).sort(function(a,b){return certCounts[b]-certCounts[a];});
+    var handlerKeys = Object.keys(handlerCounts).sort(function(a,b){return handlerCounts[b]-handlerCounts[a];});
+    var curCert = certFilter.value, curHandler = handlerFilter.value;
+    certFilter.innerHTML = '<option value="">Όλα τα πιστοποιητικά</option>' +
+      certKeys.map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+' ('+certCounts[c].toLocaleString('el-GR')+')</option>';}).join('');
+    handlerFilter.innerHTML = '<option value="">Όλοι οι υπεύθυνοι</option>' +
+      handlerKeys.map(function(h){return '<option value="'+esc(h)+'">'+esc(h)+' ('+handlerCounts[h].toLocaleString('el-GR')+')</option>';}).join('');
+    certFilter.value = curCert; handlerFilter.value = curHandler;
+  }
+  certFilter.addEventListener('change', function(){ state.cert = certFilter.value; document.getElementById('certClear').className = 't-clear' + (state.cert !== '' ? ' show' : ''); refresh(); });
+  handlerFilter.addEventListener('change', function(){ state.handler = handlerFilter.value; refresh(); });
+  statusFilter.addEventListener('change', function(){ state.status = statusFilter.value; refresh(); });
+
+  document.getElementById('certClear').addEventListener('click', function(){
+    state.cert = ''; certFilter.value = '';
+    this.className = 't-clear';
+    refresh();
+  });
+
+  document.getElementById('clearFiltersBtn').addEventListener('click', function(){
+    state.q=''; state.cert=''; state.handler=''; state.status='';
+    searchInput.value=''; certFilter.value=''; handlerFilter.value=''; statusFilter.value='';
+    document.getElementById('certClear').className = 't-clear';
+    refresh();
+  });
+
+  document.querySelectorAll('.t-head [data-sort]').forEach(function(h){
+    h.addEventListener('click', function(){
+      var f = h.getAttribute('data-sort');
+      if (state.sortField === f) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortField = f; state.sortDir = 'asc'; }
+      sortFiltered(); renderResultLine(); renderTable(true);
+    });
+  });
+
+  /* ---------------- Toast ---------------- */
+  var toastTimer = null;
+  function toast(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.className = 'toast'; }, 2600);
+  }
+
+  /* ---------------- Detail / Edit modal ---------------- */
+  var detailOverlay = document.getElementById('detailOverlay');
+  var detailView = document.getElementById('detailView');
+  var editView = document.getElementById('editView');
+  var editToggleBtn = document.getElementById('editToggleBtn');
+  var saveEditBtn = document.getElementById('saveEditBtn');
+  var cancelEditBtn = document.getElementById('cancelEditBtn');
+  var deleteBtn = document.getElementById('deleteBtn');
+  var currentDetailId = null;
+
+  var FIELD_DEFS = [
+    {k:'fileNo', label:'Α/Α Φακέλου', type:'number'},
+    {k:'plotNo', label:'Αριθμός Γηπέδου', type:'number'},
+    {k:'owner', label:'Ιδιοκτήτης', full:true},
+    {k:'kaek', label:'ΚΑΕΚ'},
+    {k:'handler', label:'Υπεύθυνος Φακέλου'},
+    {k:'certificate', label:'Πιστοποιητικό', type:'select', options:['','ΝΑΙ','ΟΧΙ','ΠΡΟΣΩΡΙΝΗ ΕΚΤΥΠΩΣΗ']},
+    {k:'certNote', label:'Σημείωση Πιστοποιητικού', full:true},
+    {k:'pending', label:'Εκκρεμότητες', full:true, area:true},
+    {k:'archived', label:'Αρχειοθέτηση', full:true, area:true},
+    {k:'comments', label:'Σχόλια', full:true}
+  ];
+
+  function openDetail(id){
+    var rec = recordsById.get(id);
+    if (!rec) return;
+    currentDetailId = id;
+    document.getElementById('detailTitle').textContent = rec.owner || (rec.fileNo != null ? ('Φάκελος ' + rec.fileNo) : 'Εγγραφή χωρίς στοιχεία');
+    document.getElementById('detailSrcTag').textContent = (rec._origin==='user' ? 'Χειρόγραφη καταχώρηση' : rec._edited ? 'Επεξεργασμένη εγγραφή' : 'Ηλεκτρονική Ταυτότητα Κτιρίου/Γηπέδου');
+    detailView.innerHTML = '<dl class="detail-grid">' + FIELD_DEFS.map(function(f){
+      return '<dt>'+f.label+'</dt><dd>'+ esc(rec[f.k] != null && rec[f.k] !== '' ? rec[f.k] : '—') +'</dd>';
+    }).join('') + '</dl>';
+    editView.style.display = 'none';
+    detailView.style.display = 'block';
+    editToggleBtn.style.display = 'inline-flex';
+    editToggleBtn.textContent = 'Επεξεργασία';
+    saveEditBtn.style.display = 'none';
+    cancelEditBtn.style.display = 'none';
+    detailOverlay.className = 'overlay show';
+    deleteBtn.textContent = 'Διαγραφή';
+    deleteBtn.dataset.armed = '';
+  }
+
+  function fieldHtml(f, val){
+    var cls = 'field' + (f.full ? ' full' : '');
+    if (f.type === 'select') {
+      var opts = f.options.map(function(o){
+        return '<option value="'+esc(o)+'"'+(val===o?' selected':'')+'>'+(o===''?'—':esc(o))+'</option>';
+      }).join('');
+      return '<div class="'+cls+'"><label>'+f.label+'</label><select data-k="'+f.k+'">'+opts+'</select></div>';
+    }
+    if (f.area) return '<div class="'+cls+'"><label>'+f.label+'</label><textarea data-k="'+f.k+'">'+esc(val||'')+'</textarea></div>';
+    var type = f.type === 'number' ? 'number' : 'text';
+    return '<div class="'+cls+'"><label>'+f.label+'</label><input type="'+type+'" data-k="'+f.k+'" value="'+esc(val!=null?val:'')+'"></div>';
+  }
+
+  editToggleBtn.addEventListener('click', function(){
+    var editing = editView.style.display !== 'none';
+    if (!editing) {
+      var rec = recordsById.get(currentDetailId);
+      editView.innerHTML = FIELD_DEFS.map(function(f){ return fieldHtml(f, rec[f.k]); }).join('');
+      editView.style.display = 'grid';
+      detailView.style.display = 'none';
+      editToggleBtn.style.display = 'none';
+      saveEditBtn.style.display = 'inline-flex';
+      cancelEditBtn.style.display = 'inline-flex';
+    }
+  });
+
+  cancelEditBtn.addEventListener('click', function(){ openDetail(currentDetailId); });
+
+  function readForm(container){
+    var patch = {};
+    container.querySelectorAll('[data-k]').forEach(function(inp){
+      var k = inp.getAttribute('data-k');
+      var v = inp.value.trim();
+      var def = FIELD_DEFS.filter(function(f){return f.k===k;})[0];
+      patch[k] = (def && def.type === 'number') ? (v ? parseFloat(v) : null) : (v || null);
+    });
+    return patch;
+  }
+
+  saveEditBtn.addEventListener('click', function(){
+    var rec = recordsById.get(currentDetailId);
+    var patch = readForm(editView);
+    Object.assign(rec, patch);
+    rec._s = buildBlob(rec);
+    if (rec._origin === 'user') {
+      var idx = overrides.adds.findIndex(function(a){return a.id === rec.id;});
+      if (idx > -1) overrides.adds[idx] = cleanForStore(rec);
+    } else {
+      rec._edited = true;
+      overrides.edits[rec.id] = cleanForStore(rec, true);
+    }
+    persistOverrides();
+    toast('Η εγγραφή ενημερώθηκε.');
+    populateFilterSelects();
+    refresh();
+    openDetail(currentDetailId);
+  });
+
+  deleteBtn.addEventListener('click', function(){
+    if (deleteBtn.dataset.armed !== '1') {
+      deleteBtn.dataset.armed = '1';
+      deleteBtn.textContent = 'Επιβεβαίωση διαγραφής;';
+      return;
+    }
+    var rec = recordsById.get(currentDetailId);
+    rec._deleted = true;
+    if (rec._origin === 'user') {
+      overrides.adds = overrides.adds.filter(function(a){return a.id !== rec.id;});
+      records = records.filter(function(r){return r.id !== rec.id;});
+      recordsById.delete(rec.id);
+    } else {
+      if (overrides.deletes.indexOf(rec.id) === -1) overrides.deletes.push(rec.id);
+      delete overrides.edits[rec.id];
+    }
+    persistOverrides();
+    detailOverlay.className = 'overlay';
+    toast('Η εγγραφή διαγράφηκε.');
+    populateFilterSelects();
+    refresh();
+  });
+
+  function cleanForStore(rec, editOnly){
+    var out = {};
+    if (!editOnly) out.id = rec.id;
+    FIELD_DEFS.forEach(function(f){ out[f.k] = rec[f.k]; });
+    return out;
+  }
+
+  document.querySelectorAll('[data-close]').forEach(function(b){
+    b.addEventListener('click', function(){
+      detailOverlay.className = 'overlay';
+      addOverlay.className = 'overlay';
+    });
+  });
+  [detailOverlay].forEach(function(ov){
+    ov.addEventListener('click', function(e){ if (e.target === ov) ov.className = 'overlay'; });
+  });
+
+  /* ---------------- Add modal ---------------- */
+  var addOverlay = document.getElementById('addOverlay');
+  var addForm = document.getElementById('addForm');
+  document.getElementById('addBtn').addEventListener('click', function(){
+    addForm.innerHTML = FIELD_DEFS.map(function(f){ return fieldHtml(f, ''); }).join('');
+    addOverlay.className = 'overlay show';
+  });
+  addOverlay.addEventListener('click', function(e){ if (e.target === addOverlay) addOverlay.className = 'overlay'; });
+
+  document.getElementById('saveAddBtn').addEventListener('click', function(){
+    var patch = readForm(addForm);
+    if (!patch.owner && patch.fileNo == null) { toast('Συμπλήρωσε τουλάχιστον ιδιοκτήτη ή α/α φακέλου.'); return; }
+    var rec = Object.assign({ id: 'u' + (addCounter++) }, patch);
+    rec._origin = 'user';
+    rec._s = buildBlob(rec);
+    records.push(rec);
+    recordsById.set(rec.id, rec);
+    overrides.adds.push(cleanForStore(rec));
+    persistOverrides();
+    addOverlay.className = 'overlay';
+    toast('Η εγγραφή προστέθηκε.');
+    populateFilterSelects();
+    refresh();
+  });
+
+  /* ---------------- CSV export ---------------- */
+  function csvEscape(v){
+    v = (v == null) ? '' : v.toString();
+    if (/[",\n;]/.test(v)) return '"' + v.replace(/"/g,'""') + '"';
+    return v;
+  }
+  document.getElementById('exportBtn').addEventListener('click', function(){
+    var cols = FIELD_DEFS.map(function(f){return f.k;});
+    var headers = FIELD_DEFS.map(function(f){return f.label;});
+    var lines = [headers.join(';')];
+    filtered.forEach(function(r){
+      lines.push(cols.map(function(c){return csvEscape(r[c]);}).join(';'));
+    });
+    var BOM = String.fromCharCode(0xFEFF);
+    var csv = BOM + lines.join('\r\n');
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'taftotita-ktiriou-gipedou-export.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Έγινε εξαγωγή ' + filtered.length.toLocaleString('el-GR') + ' εγγραφών.');
+  });
+
+  /* ---------------- Boot ---------------- */
+  function afterDataReady(){
+    populateFilterSelects();
+    refresh();
+  }
+  loadOverridesAndInit();
+
+})();
+</script>
+</body>
+</html>
