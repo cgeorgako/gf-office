@@ -1,3 +1,5 @@
 progecad-dgm/DGM.lsp -text
 progecad-dgm/DGM.mnu -text
 progecad-dgm/tools/dxf-hash.cmd -text
+progecad-dgm/DGM-ansi.lsp -text
+progecad-dgm/DGM-ansi.mnu -text
