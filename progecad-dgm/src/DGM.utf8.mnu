@@ -1,32 +1,64 @@
-//// ΔΓΜ - Μενού ProgeCAD/IntelliCAD για τα εργαλεία DGM.lsp
-//// Φόρτωση: εντολή MENULOAD (ή _MENULOAD) και επιλογή του DGM.mnu
-//// Το μενού οργανώνει τις εντολές κατά τη ροή εργασίας σύνταξης ΔΓΜ,
-//// αντίστοιχα με τη δομή εμπορικών εργαλείων τύπου KtimaDGM:
-//// Υπόβαθρο -> Σχεδίαση -> Αρίθμηση/Πίνακες -> Έλεγχος -> Βοήθεια
+//// GF-DGM - Μενού ProgeCAD για τα εργαλεία DGM.lsp
+//// Φόρτωση: εντολή MENULOAD και επιλογή του DGM.mnu
+//// Δύο βασικές κατηγορίες: Α. Τοπογραφικά   Β. ΔΓΜ
+//// Η δομή ακολουθεί τις τυπικές ροές εργασίας του εγχειριδίου KtimaDGM (κεφ. 9)
 
 ***MENUGROUP=DGM
 
 ***POP1
-**DGMMENU
+**DGMTOPO
+[Τοπογραφικά]
+[1. Δημιουργία Layers (DGML)]^C^C_DGML
+[2. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
+[3. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
+[--]
+[4. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
+[5. Αρίθμηση κορυφών polyline (DGMK)]^C^C_DGMK
+[6. Πίνακας συντεταγμένων κορυφών (DGMP)]^C^C_DGMP
+[Εξαγωγή συντεταγμένων σε TXT (DGMTXT)]^C^C_DGMTXT
+[--]
+[7. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
+[8. Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
+[9. Υπογραφή PDF με JSignPdf (DGMSIGN)]^C^C_DGMSIGN
+[10. ZIP αρχείων προς παράδοση (DGMZIP)]^C^C_DGMZIP
+[--]
+[Τοποθέτηση ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
+[Λίστα εντολών (DGMHELP)]^C^C_DGMHELP
+
+***POP2
+**DGMDGM
 [ΔΓΜ]
-[->1. Υπόβαθρο - Layers]
-  [Δημιουργία τυποποιημένων Layers ΔΓΜ (DGML)]^C^C_DGML
-  [<-Τοποθέτηση κειμένου ΚΑΕΚ (DGMKAEK)]^C^C_DGMKAEK
-[->2. Γεωμετρία μεταβολής - Χωρικές πράξεις]
+[1. Δημιουργία Layers (DGML)]^C^C_DGML
+[2. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
+[->3. Δημιουργία Πολυγώνων]
+  [Πολύγωνο από εσωτερικό σημείο (DGMBND)]^C^C_DGMBND
+  [Πολύγωνο από σημείο - μόνο PST_KAEK και DGM_PROP_FINAL (DGMBNDPD)]^C^C_DGMBNDPD
+  [--]
+  [DGM_PROP_FINAL: Κατάτμηση PST_KAEK με LINE_XM (DGMKAT)]^C^C_DGMKAT
+  [DGM_PROP_FINAL: Αυτόματα υπόλοιπα από PST_KAEK (DGMGM)]^C^C_DGMGM
+  [VST_FINAL από LINE_XM_VST (DGMVST)]^C^C_DGMVST
+  [--]
   [Κατάτμηση πολυγώνου με γραμμή κοπής (DGMSPLIT)]^C^C_DGMSPLIT
   [Συνένωση όμορων πολυγώνων (DGMUNION)]^C^C_DGMUNION
-  [Αποκοπή τμήματος από γεωτεμάχιο (DGMCUT)]^C^C_DGMCUT
-  [--]
-  [<-Χαρακτηρισμός τμήματος Α/Δ + ετικέτα (DGMA)]^C^C_DGMA
-[->3. Αρίθμηση - Πίνακες]
-  [Αρίθμηση κορυφών polyline (DGMK)]^C^C_DGMK
-  [Πίνακας συντεταγμένων κορυφών (DGMP)]^C^C_DGMP
-  [Πίνακας αρχικών-τελικών εμβαδών (DGME)]^C^C_DGME
-  [<-Πίνακας για τη διόρθωση των γεωτεμαχίων (DGMT)]^C^C_DGMT
-[->4. Έλεγχος]
-  [<-Έλεγχος διαγράμματος πριν την υποβολή (DGMC)]^C^C_DGMC
-[->5. Εξαγωγή - Υποβολή]
-  [Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
-  [<-Τοποθέτηση ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
+  [<-Αποκοπή τμήματος από γεωτεμάχιο (DGMCUT)]^C^C_DGMCUT
+[->4. Αντιγραφή στοιχείων Layer]
+  [DGM_PROP_FINAL - BOUND_IMPL - BOUND_UNIMPL από TOPO_PROP (DGMCOPY)]^C^C_DGMCOPY
+  [<-Χειροκίνητος χαρακτηρισμός τμήματος Α-Δ (DGMA)]^C^C_DGMA
+[5. Δημιουργία AREA_A και AREA_D (DGMAREAS)]^C^C_DGMAREAS
+[6. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
 [--]
+[7. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
+[8. Αρίθμηση κορυφών polyline (DGMK)]^C^C_DGMK
+[->9. Πίνακες]
+  [Πίνακας συντεταγμένων κορυφών (DGMP)]^C^C_DGMP
+  [Πίνακας αρχικών και τελικών εμβαδών (DGME)]^C^C_DGME
+  [Πίνακας για τη διόρθωση των γεωτεμαχίων (DGMT)]^C^C_DGMT
+  [<-Εξαγωγή συντεταγμένων σε TXT (DGMTXT)]^C^C_DGMTXT
+[--]
+[10. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
+[11. Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
+[12. Υπογραφή PDF με JSignPdf (DGMSIGN)]^C^C_DGMSIGN
+[13. ZIP αρχείων προς παράδοση (DGMZIP)]^C^C_DGMZIP
+[--]
+[Τοποθέτηση ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
 [Λίστα εντολών (DGMHELP)]^C^C_DGMHELP

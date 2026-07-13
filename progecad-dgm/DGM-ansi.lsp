@@ -239,7 +239,7 @@
   (setq n (max 1 (strlen str)))
   (min h (/ (* 0.95 w) (* 0.8 n))))
 
-(defun dgm:table (ins title heads wids rows h lay
+(defun dgm:table (ins title heads wids rows h lay footer
                   / tot x0 y0 th hh nhl y x i k w col row s ht yy)
   (setq tot (apply '+ wids)
         x0  (car ins)
@@ -294,19 +294,55 @@
     (dgm:line (list x0 (- y hh (* k th)))
               (list (+ x0 tot) (- y hh (* k th))) lay)
     (setq k (1+ k)))
+  ;; προαιρετική τελική γραμμή εμβαδού (ενιαίο κελί σε όλο το πλάτος)
+  (if footer
+    (progn
+      (dgm:rect x0 (- yy th) (+ x0 tot) yy lay)
+      (dgm:textc (list (+ x0 (/ tot 2.0)) (- yy (/ th 2.0)))
+                 (dgm:fit-h footer tot (* 0.9 h)) footer lay)))
   (princ))
 
 ;;; ============================ ΕΝΤΟΛΕΣ =================================
 
-;;; DGML - Δημιουργία τυποποιημένων layers
-(defun c:DGML ( / n)
+;;; DGML - Δημιουργία τυποποιημένων layers ανά τύπο διαγράμματος
+(setq dgm:*lay-topo*
+ '("BOUND_IMPL" "BOUND_UNIMPL" "PST_KAEK" "TOPO_PROP"
+   "ROAD" "OT" "BLD" "VST" "EAS" "MINE" "OBJ"
+   "DBOUND_RYM" "DBOUND_AIG" "DBOUND_PRL" "DBOUND_PAIG"
+   "DBOUND_REM" "DBOUND_APAL" "DBOUND_PROP"
+   "pinakas_sintetagmenon"))
+
+(setq dgm:*lay-dgm*
+ (append dgm:*lay-topo*
+  '("TOPO_PROP_NEW" "DGM_PROP_FINAL" "LINE_XM" "LINE_XM_VST"
+    "AREA_A" "AREA_D" "AREA_A-labels" "AREA_D-labels"
+    "AREA_A-hatch" "AREA_D-hatch"
+    "VST_FINAL" "EAS_FINAL" "MINE_FINAL")))
+
+(setq dgm:*lay-praksi*
+ (append dgm:*lay-topo*
+  '("TOPO_PROP_NEW" "DGM_PROP_FINAL" "LINE_XM" "LINE_XM_VST"
+    "VST_FINAL" "EAS_FINAL" "MINE_FINAL")))
+
+(defun dgm:asktype ( / typ)
+  (princ "\nΤύπος διαγράμματος:")
+  (princ "\n  1 = Τοπογραφικό Διάγραμμα")
+  (princ "\n  2 = ΔΓΜ (Διόρθωσης)")
+  (princ "\n  3 = Διάγραμμα Πράξης")
+  (dgm:getint "\nΕπιλογή" (if dgm:*typ* dgm:*typ* 2)))
+
+(defun c:DGML ( / typ lst n)
+  (setq typ (dgm:asktype))
+  (setq dgm:*typ* typ)
+  (setq lst (cond ((= typ 1) dgm:*lay-topo*)
+                  ((= typ 3) dgm:*lay-praksi*)
+                  (t dgm:*lay-dgm*)))
   (setq n 0)
-  (foreach l dgm:*layers*
-    (if (not (tblsearch "LAYER" (car l)))
-      (progn (dgm:layer (car l) (cadr l)) (setq n (1+ n)))))
-  (princ (strcat "\nΔημιουργήθηκαν " (itoa n)
-                 " layers (σύνολο τυποποιημένων: "
-                 (itoa (length dgm:*layers*)) ")."))
+  (foreach l lst
+    (if (not (tblsearch "LAYER" l))
+      (progn (dgm:layer-std l) (setq n (1+ n)))))
+  (princ (strcat "\nΔημιουργήθηκαν " (itoa n) " νέα layers ("
+                 (itoa (length lst)) " τυποποιημένα για τον τύπο αυτόν)."))
   (princ))
 
 ;;; DGMK - Αρίθμηση κορυφών polyline
@@ -441,7 +477,12 @@
       (if ins
         (progn
           (dgm:layer-std "pinakas_sintetagmenon")
-          (dgm:table ins title heads wids mrows h "pinakas_sintetagmenon")
+          (dgm:table ins title heads wids mrows h "pinakas_sintetagmenon"
+                     (if (dgm:closedp en)
+                       (strcat "Ε (" (car nums) ",...," (last nums) ", "
+                               (car nums) "): "
+                               (rtos (dgm:area pts) 2 2) " τ.μ.")
+                       nil))
           (princ (strcat "\nΟ πίνακας δημιουργήθηκε ("
                          (itoa (length pts)) " κορυφές)."))))))
   (princ))
@@ -478,7 +519,7 @@
         (progn
           (dgm:layer-std "pinakas_sintetagmenon")
           (dgm:table ins "ΠΙΝΑΚΑΣ ΑΡΧΙΚΩΝ ΚΑΙ ΤΕΛΙΚΩΝ ΕΜΒΑΔΩΝ ΕΠΗΡΕΑΖΟΜΕΝΩΝ ΓΕΩΤΕΜΑΧΙΩΝ"
-                     heads wids rows h "pinakas_sintetagmenon")
+                     heads wids rows h "pinakas_sintetagmenon" nil)
           (princ (strcat "\nΟ πίνακας δημιουργήθηκε (" (itoa (length rows))
                          " γεωτεμάχια)."))))))
   (princ))
@@ -511,7 +552,7 @@
         (progn
           (dgm:layer-std "pinakas_sintetagmenon")
           (dgm:table ins "ΠΙΝΑΚΑΣ ΓΙΑ ΤΗ ΔΙΟΡΘΩΣΗ ΤΩΝ ΓΕΩΤΕΜΑΧΙΩΝ"
-                     heads wids rows h "pinakas_sintetagmenon")
+                     heads wids rows h "pinakas_sintetagmenon" nil)
           (princ "\nΟ πίνακας δημιουργήθηκε.")))))
   (princ))
 
@@ -560,8 +601,57 @@
       (princ (strcat "\nΤοποθετήθηκε ΚΑΕΚ " s " στο layer " lay))))
   (princ))
 
-;;; DGMC - Έλεγχοι πριν την υποβολή
-(defun c:DGMC ( / tol ss i e d et lay nerr nwarn polys texts pts p
+;;; Κανόνες οντοτήτων ανά layer: (όνομα δέχεται-polyline μόνο-κλειστές δέχεται-κείμενο)
+(setq dgm:*layrules*
+ '(("PST_KAEK"       T   T   T)
+   ("DGM_PROP_FINAL" T   T   nil)
+   ("TOPO_PROP"      T   T   nil)
+   ("TOPO_PROP_NEW"  T   T   nil)
+   ("AREA_A"         T   T   nil)
+   ("AREA_D"         T   T   nil)
+   ("BLD"            T   T   T)
+   ("VST"            T   T   T)
+   ("EAS"            T   T   T)
+   ("MINE"           T   T   nil)
+   ("VST_FINAL"      T   T   nil)
+   ("EAS_FINAL"      T   T   nil)
+   ("MINE_FINAL"     T   T   nil)
+   ("LINE_XM"        T   nil nil)
+   ("LINE_XM_VST"    T   nil nil)
+   ("BOUND_IMPL"     T   nil nil)
+   ("BOUND_UNIMPL"   T   nil nil)
+   ("DBOUND_PROP"    T   T   T)
+   ("ROAD"           nil nil T)
+   ("OT"             nil nil T)
+   ("AREA_A-labels"  nil nil T)
+   ("AREA_D-labels"  nil nil T)))
+
+;; Είναι ο χαρακτήρας ψηφίο;
+(defun dgm:digitp (c) (and (>= (ascii c) 48) (<= (ascii c) 57)))
+
+(defun dgm:alldigits (s from to / i ok)
+  (setq ok T i from)
+  (while (<= i to)
+    (if (not (dgm:digitp (substr s i 1))) (setq ok nil))
+    (setq i (1+ i)))
+  ok)
+
+;; Μορφή κειμένου στο PST_KAEK: 'KAEK 'NEO 'TRYPA ή nil (λάθος μορφή)
+(defun dgm:kaekfmt (s)
+  (cond
+    ((and (>= (strlen s) 3) (= (substr s 1 3) "ΝΕΟ")) 'NEO)
+    ((and (>= (strlen s) 5) (= (substr s 1 5) "ΤΡΥΠΑ")) 'TRYPA)
+    ((/= 12 (strlen s)) nil)
+    ((dgm:alldigits s 1 12) 'KAEK)
+    ((and (dgm:alldigits s 1 5)
+          (= (substr s 6 2) "ΕΚ")
+          (dgm:alldigits s 8 12))
+     'KAEK)
+    (t nil)))
+
+;;; DGMC - Έλεγχος ορθότητας σχεδίου πριν την υποβολή
+(defun c:DGMC ( / tol typ req rule ktexts tx kc nc tc island ip p2 pair labs
+                  ss i e d et lay nerr nwarn polys texts pts p
                   pstpolys pstsegs finpolys segs a b j k dd mind found
                   sum1 sum2 cnt inpts)
   ;; καθάρισμα παλιών σημαδιών ελέγχου
@@ -573,18 +663,42 @@
         (entdel (ssname ss i))
         (setq i (1+ i)))))
   (dgm:layer "DGM_CHECK" 1)
+  (setq typ (dgm:asktype))
+  (setq dgm:*typ* typ)
   (setq tol (dgm:getreal "\nΑνοχή ταύτισης κορυφών (m)" 0.001))
   (setq nerr 0 nwarn 0)
-  (princ "\n==================== ΕΛΕΓΧΟΣ ΔΓΜ ====================")
-  ;; 1. Υποχρεωτικά layers
-  (foreach lay '("PST_KAEK" "DGM_PROP_FINAL")
-    (if (not (tblsearch "LAYER" lay))
+  (princ "\n================= ΕΛΕΓΧΟΣ ΟΡΘΟΤΗΤΑΣ =================")
+  ;; 1. Υποχρεωτικά layers με οντότητες, ανά τύπο διαγράμματος
+  (setq req (cond
+              ((= typ 1) '("BOUND_IMPL" "BOUND_UNIMPL" "PST_KAEK" "TOPO_PROP"))
+              ((= typ 3) '("BOUND_IMPL" "BOUND_UNIMPL" "PST_KAEK"
+                           "TOPO_PROP" "TOPO_PROP_NEW"))
+              (t '("BOUND_IMPL" "BOUND_UNIMPL" "PST_KAEK"
+                   "TOPO_PROP" "TOPO_PROP_NEW" "DGM_PROP_FINAL"))))
+  (foreach lay req
+    (if (null (ssget "_X" (list (cons 8 lay))))
       (progn
-        (princ (strcat "\n[ΣΦΑΛΜΑ] Δεν υπάρχει το layer " lay))
+        (princ (strcat "\n[ΣΦΑΛΜΑ] Δεν υπάρχει οντότητα στο layer " lay))
         (setq nerr (1+ nerr)))))
-  ;; 2. Έλεγχος οντοτήτων στα βασικά layers
-  (foreach lay '("PST_KAEK" "DGM_PROP_FINAL" "TOPO_PROP" "TOPO_PROP_NEW"
-                 "PST" "AREA_A" "AREA_D")
+  (if (= typ 2)
+    (if (and (null (ssget "_X" '((8 . "AREA_A"))))
+             (null (ssget "_X" '((8 . "AREA_D")))))
+      (progn
+        (princ "\n[ΣΦΑΛΜΑ] Απαιτείται τουλάχιστον ένα από τα layers AREA_A / AREA_D με οντότητες.")
+        (setq nerr (1+ nerr)))))
+  (if (= typ 3)
+    (if (not (or (ssget "_X" '((8 . "LINE_XM")))
+                 (ssget "_X" '((8 . "LINE_XM_VST")))
+                 (ssget "_X" '((8 . "VST_FINAL")))
+                 (ssget "_X" '((8 . "EAS_FINAL")))
+                 (ssget "_X" '((8 . "MINE_FINAL")))
+                 (ssget "_X" '((8 . "DGM_PROP_FINAL")))))
+      (progn
+        (princ "\n[ΣΦΑΛΜΑ] Απαιτείται τουλάχιστον ένα από τα layers LINE_XM / LINE_XM_VST / VST_FINAL / EAS_FINAL / MINE_FINAL / DGM_PROP_FINAL.")
+        (setq nerr (1+ nerr)))))
+  ;; 2. Έλεγχος οντοτήτων ανά layer βάσει επιτρεπόμενων τύπων
+  (foreach rule dgm:*layrules*
+    (setq lay (car rule))
     (setq ss (ssget "_X" (list (cons 8 lay))))
     (if ss
       (progn
@@ -597,7 +711,13 @@
             ((= et "LWPOLYLINE")
              (setq polys (1+ polys))
              (setq pts (dgm:lwpts e))
-             (if (not (dgm:closedp e))
+             (if (not (cadr rule))
+               (progn
+                 (princ (strcat "\n[ΣΦΑΛΜΑ] Το layer " lay
+                                " δέχεται μόνο κείμενα - βρέθηκε polyline."))
+                 (dgm:mkpoly pts "DGM_CHECK" (dgm:closedp e))
+                 (setq nerr (1+ nerr))))
+             (if (and (caddr rule) (not (dgm:closedp e)))
                (progn
                  (princ (strcat "\n[ΣΦΑΛΜΑ] Ανοιχτή polyline στο layer " lay
                                 " κοντά στο σημείο ("
@@ -621,17 +741,23 @@
                    (dgm:circle (nth j pts) 2.0 "DGM_CHECK")
                    (setq nwarn (1+ nwarn))))
                (setq j (1+ j))))
-            ((= et "TEXT") (setq texts (1+ texts)))
+            ((or (= et "TEXT") (= et "MTEXT"))
+             (setq texts (1+ texts))
+             (if (not (cadddr rule))
+               (progn
+                 (princ (strcat "\n[ΠΡΟΣΟΧΗ] Κείμενο στο layer " lay
+                                " - το layer δεν προβλέπει κείμενα."))
+                 (setq nwarn (1+ nwarn)))))
             ((or (= et "LINE") (= et "ARC") (= et "SPLINE")
-                 (= et "POLYLINE") (= et "ELLIPSE"))
+                 (= et "POLYLINE") (= et "ELLIPSE") (= et "CIRCLE"))
              (princ (strcat "\n[ΣΦΑΛΜΑ] Οντότητα " et " στο layer " lay
                             " - τα όρια πρέπει να είναι LWPolylines."))
              (setq nerr (1+ nerr))))
           (setq i (1+ i)))
         (princ (strcat "\n[INFO] Layer " lay ": " (itoa polys)
                        " polylines, " (itoa texts) " κείμενα.")))))
-  ;; 3. Αντιστοιχία πολυγώνων/ΚΑΕΚ στο PST_KAEK
-  (setq pstpolys nil texts nil)
+  ;; 3. Κείμενα ΚΑΕΚ: μορφή και αντιστοίχιση με πολύγωνα
+  (setq pstpolys nil ktexts nil)
   (setq ss (ssget "_X" '((8 . "PST_KAEK"))))
   (if ss
     (progn
@@ -644,18 +770,121 @@
           ((= et "LWPOLYLINE")
            (if (dgm:closedp e)
              (setq pstpolys (cons (dgm:lwpts e) pstpolys))))
-          ((= et "TEXT")
-           (setq texts (cons (cdr (assoc 10 d)) texts))))
+          ((or (= et "TEXT") (= et "MTEXT"))
+           (setq ktexts (cons (cons (list (cadr (assoc 10 d))
+                                          (caddr (assoc 10 d)))
+                                    (cdr (assoc 1 d)))
+                              ktexts))))
         (setq i (1+ i)))))
-  (foreach pts pstpolys
-    (setq cnt 0)
-    (foreach p texts
-      (if (dgm:inpoly p pts) (setq cnt (1+ cnt))))
-    (if (= cnt 0)
+  ;; 3α. Μορφή κειμένων ΚΑΕΚ
+  (foreach tx ktexts
+    (if (null (dgm:kaekfmt (cdr tx)))
       (progn
-        (princ "\n[ΣΦΑΛΜΑ] Πολύγωνο PST_KAEK χωρίς κείμενο ΚΑΕΚ στο εσωτερικό του.")
-        (dgm:circle (car pts) 2.0 "DGM_CHECK")
+        (princ (strcat "\n[ΣΦΑΛΜΑ] Κείμενο με λάθος μορφή στο PST_KAEK: \""
+                       (cdr tx)
+                       "\" (12 ψηφία, 5ψηφ+ΕΚ+5ψηφ, ΝΕΟ... ή ΤΡΥΠΑ...)"))
+        (dgm:circle (car tx) 2.0 "DGM_CHECK")
         (setq nerr (1+ nerr)))))
+  ;; 3β. Κάθε υφιστάμενος ΚΑΕΚ πρέπει να βρίσκεται εντός πολυγώνου PST_KAEK
+  (foreach tx ktexts
+    (if (eq 'KAEK (dgm:kaekfmt (cdr tx)))
+      (progn
+        (setq found nil)
+        (foreach pts pstpolys
+          (if (dgm:inpoly (car tx) pts) (setq found T)))
+        (if (not found)
+          (progn
+            (princ (strcat "\n[ΣΦΑΛΜΑ] Ο ΚΑΕΚ " (cdr tx)
+                           " δεν βρίσκεται εντός πολυγώνου PST_KAEK."))
+            (dgm:circle (car tx) 2.0 "DGM_CHECK")
+            (setq nerr (1+ nerr)))))))
+  ;; 3γ. Πολύγωνα PST_KAEK: ακριβώς ένας υφιστάμενος ΚΑΕΚ (νησίδες/ΤΡΥΠΑ εξαιρούνται)
+  (foreach pts pstpolys
+    (setq kc 0 tc 0 island nil)
+    (foreach tx ktexts
+      (if (dgm:inpoly (car tx) pts)
+        (cond
+          ((eq 'KAEK (dgm:kaekfmt (cdr tx))) (setq kc (1+ kc)))
+          ((eq 'TRYPA (dgm:kaekfmt (cdr tx))) (setq tc (1+ tc))))))
+    (if (= kc 0)
+      (progn
+        (setq ip (dgm:innerpt pts))
+        (foreach p2 pstpolys
+          (if (and ip (not (eq p2 pts)) (dgm:inpoly ip p2))
+            (setq island T)))
+        (cond
+          ((> tc 0)
+           (princ "\n[INFO] Πολύγωνο PST_KAEK χαρακτηρισμένο ως ΤΡΥΠΑ."))
+          (island
+           (princ "\n[ΠΡΟΣΟΧΗ] Νησίδα PST_KAEK χωρίς ΚΑΕΚ - θα εμφανιστεί ως ΑΓΝΩΣΤΟ ΚΑΕΚ.")
+           (setq nwarn (1+ nwarn)))
+          (t
+           (princ "\n[ΣΦΑΛΜΑ] Πολύγωνο PST_KAEK χωρίς κείμενο ΚΑΕΚ στο εσωτερικό του.")
+           (dgm:circle (car pts) 2.0 "DGM_CHECK")
+           (setq nerr (1+ nerr)))))
+      (if (> kc 1)
+        (progn
+          (princ "\n[ΣΦΑΛΜΑ] Πολύγωνο PST_KAEK με περισσότερα από ένα κείμενα ΚΑΕΚ.")
+          (dgm:circle (car pts) 2.0 "DGM_CHECK")
+          (setq nerr (1+ nerr))))))
+  ;; 3δ. Πολύγωνα DGM_PROP_FINAL: ένας (ΝΕΟ ή υφιστάμενος) ΚΑΕΚ, όχι και τα δύο
+  (setq ss (ssget "_X" '((0 . "LWPOLYLINE") (8 . "DGM_PROP_FINAL"))))
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq e (ssname ss i))
+        (if (dgm:closedp e)
+          (progn
+            (setq pts (dgm:lwpts e) kc 0 nc 0)
+            (foreach tx ktexts
+              (if (dgm:inpoly (car tx) pts)
+                (cond
+                  ((eq 'KAEK (dgm:kaekfmt (cdr tx))) (setq kc (1+ kc)))
+                  ((eq 'NEO (dgm:kaekfmt (cdr tx))) (setq nc (1+ nc))))))
+            (cond
+              ((and (= kc 0) (= nc 0))
+               (princ "\n[ΣΦΑΛΜΑ] Πολύγωνο DGM_PROP_FINAL χωρίς ΚΑΕΚ (ΝΕΟ ή υφιστάμενο) στο εσωτερικό του.")
+               (dgm:circle (car pts) 2.0 "DGM_CHECK")
+               (setq nerr (1+ nerr)))
+              ((> nc 1)
+               (princ "\n[ΣΦΑΛΜΑ] Πολύγωνο DGM_PROP_FINAL με περισσότερα από ένα κείμενα ΝΕΟ.")
+               (dgm:circle (car pts) 2.0 "DGM_CHECK")
+               (setq nerr (1+ nerr)))
+              ((and (>= kc 1) (>= nc 1))
+               (princ "\n[ΣΦΑΛΜΑ] Πολύγωνο DGM_PROP_FINAL με ΝΕΟ και υφιστάμενο ΚΑΕΚ ταυτόχρονα.")
+               (dgm:circle (car pts) 2.0 "DGM_CHECK")
+               (setq nerr (1+ nerr))))))
+        (setq i (1+ i)))))
+  ;; 3ε. Πολύγωνα AREA_A/AREA_D πρέπει να περιέχουν ετικέτα στο αντίστοιχο layer labels
+  (foreach pair '(("AREA_A" . "AREA_A-labels") ("AREA_D" . "AREA_D-labels"))
+    (setq labs nil)
+    (setq ss (ssget "_X" (list '(0 . "TEXT,MTEXT") (cons 8 (cdr pair)))))
+    (if ss
+      (progn
+        (setq i 0)
+        (while (< i (sslength ss))
+          (setq d (entget (ssname ss i)))
+          (setq labs (cons (list (cadr (assoc 10 d)) (caddr (assoc 10 d))) labs))
+          (setq i (1+ i)))))
+    (setq ss (ssget "_X" (list '(0 . "LWPOLYLINE") (cons 8 (car pair)))))
+    (if ss
+      (progn
+        (setq i 0)
+        (while (< i (sslength ss))
+          (setq e (ssname ss i))
+          (if (dgm:closedp e)
+            (progn
+              (setq pts (dgm:lwpts e) cnt 0)
+              (foreach p labs
+                (if (dgm:inpoly p pts) (setq cnt (1+ cnt))))
+              (if (= cnt 0)
+                (progn
+                  (princ (strcat "\n[ΣΦΑΛΜΑ] Πολύγωνο " (car pair)
+                                 " χωρίς ετικέτα στο layer " (cdr pair) "."))
+                  (dgm:circle (car pts) 2.0 "DGM_CHECK")
+                  (setq nerr (1+ nerr))))))
+          (setq i (1+ i))))))
   ;; 4. Κορυφές DGM_PROP_FINAL πάνω στα όρια PST_KAEK
   (setq pstsegs nil)
   (foreach pts pstpolys
@@ -793,14 +1022,52 @@
     (setq i (1+ i)))
   (reverse out))
 
-;; XOR πλευρών πολυγώνων: επιστρέφει λίστα κλειστών βρόχων (λίστες κορυφών)
+;; Επόμενη κορυφή κατά τη δεξιόστροφη διάσχιση όψεων επίπεδου γραφήματος:
+;; από την κατευθυνόμενη πλευρά kprev->kcur επιλέγεται η αμέσως επόμενη
+;; δεξιόστροφα πλευρά γύρω από την kcur.
+(defun dgm:nextcw (kprev kcur adj verts / pp pc thin best bestd th d c)
+  (setq pp (cdr (assoc kprev verts))
+        pc (cdr (assoc kcur verts)))
+  (setq thin (atan (- (cadr pp) (cadr pc)) (- (car pp) (car pc))))
+  (setq best nil bestd 1e99)
+  (foreach c (cdr (assoc kcur adj))
+    (setq th (car c) d (- thin th))
+    (while (<= d 1e-9) (setq d (+ d 6.283185307179586)))
+    (while (> d 6.283185307179586) (setq d (- d 6.283185307179586)))
+    (if (< d bestd) (setq bestd d best (cdr c))))
+  best)
+
+;; XOR πλευρών πολυγώνων: επιστρέφει λίστα κλειστών βρόχων (όψεις CCW).
+;; Οι κοινές πλευρές ακυρώνονται, οι πλευρές τέμνονται στα σημεία τομής τους
+;; και οι εναπομείνασες αλυσιδώνονται με γωνιακή διάσχιση όψεων.
 (defun dgm:xorloops (polys tol / cpolys pts p allpts dpolys edges n i a b k
-                       rec loops loop curkey startkey found)
+                       rec loops verts adj ka kb cell th used dirs d0
+                       face kprev kcur knext guard pts2
+                       ia ib ptsa ptsb na nb j c d ip)
   (setq dgm:*canon* nil)
   ;; κανονικοποίηση κορυφών
   (setq cpolys nil)
   (foreach pts polys
     (setq cpolys (cons (mapcar '(lambda (p) (dgm:canon p tol)) pts) cpolys)))
+  ;; τομές πλευρών μεταξύ διαφορετικών πολυγώνων -> νέα κοινά σημεία
+  (setq ia 0)
+  (foreach ptsa cpolys
+    (setq ib 0)
+    (foreach ptsb cpolys
+      (if (> ib ia)
+        (progn
+          (setq na (length ptsa) nb (length ptsb) i 0)
+          (while (< i na)
+            (setq a (nth i ptsa) b (nth (rem (1+ i) na) ptsa))
+            (setq j 0)
+            (while (< j nb)
+              (setq c (nth j ptsb) d (nth (rem (1+ j) nb) ptsb))
+              (setq ip (inters a b c d T))
+              (if ip (dgm:canon (list (car ip) (cadr ip)) tol))
+              (setq j (1+ j)))
+            (setq i (1+ i)))))
+      (setq ib (1+ ib)))
+    (setq ia (1+ ia)))
   (setq allpts dgm:*canon*)
   ;; πύκνωση με τις κορυφές όλων των πολυγώνων
   (setq dpolys nil)
@@ -821,32 +1088,51 @@
             (setq edges (dgm:rm rec edges))
             (setq edges (cons (list k a b) edges)))))
       (setq i (1+ i))))
-  ;; αλυσίδωση των πλευρών που απέμειναν σε κλειστούς βρόχους
-  (setq loops nil)
-  (while edges
-    (setq rec (car edges) edges (cdr edges))
-    (setq loop (list (cadr rec) (caddr rec)))
-    (setq startkey (dgm:rkey (cadr rec))
-          curkey   (dgm:rkey (caddr rec)))
-    (setq found T)
-    (while (and found (/= curkey startkey))
-      (setq found nil)
-      (foreach rec edges
-        (if (not found)
+  ;; κατασκευή λιστών γειτνίασης (κορυφή -> γωνίες προς γείτονες)
+  (setq verts nil adj nil)
+  (foreach rec edges
+    (setq a (cadr rec) b (caddr rec)
+          ka (dgm:rkey a) kb (dgm:rkey b))
+    (if (not (assoc ka verts)) (setq verts (cons (cons ka a) verts)))
+    (if (not (assoc kb verts)) (setq verts (cons (cons kb b) verts)))
+    (setq th (atan (- (cadr b) (cadr a)) (- (car b) (car a))))
+    (setq cell (assoc ka adj))
+    (if cell
+      (setq adj (subst (cons ka (cons (cons th kb) (cdr cell))) cell adj))
+      (setq adj (cons (list ka (cons th kb)) adj)))
+    (setq th (atan (- (cadr a) (cadr b)) (- (car a) (car b))))
+    (setq cell (assoc kb adj))
+    (if cell
+      (setq adj (subst (cons kb (cons (cons th ka) (cdr cell))) cell adj))
+      (setq adj (cons (list kb (cons th ka)) adj))))
+  ;; εξαγωγή όψεων με γωνιακή διάσχιση - κρατάμε τις CCW (εσωτερικές)
+  (setq used nil loops nil dirs nil)
+  (foreach rec edges
+    (setq ka (dgm:rkey (cadr rec)) kb (dgm:rkey (caddr rec)))
+    (setq dirs (cons (cons ka kb) (cons (cons kb ka) dirs))))
+  (foreach d0 dirs
+    (if (not (member (strcat (car d0) ">" (cdr d0)) used))
+      (progn
+        (setq face (list (car d0) (cdr d0)))
+        (setq used (cons (strcat (car d0) ">" (cdr d0)) used))
+        (setq kprev (car d0) kcur (cdr d0) guard 0)
+        (while (and face (< guard 100000))
+          (setq guard (1+ guard))
+          (setq knext (dgm:nextcw kprev kcur adj verts))
           (cond
-            ((= (dgm:rkey (cadr rec)) curkey)
-             (setq loop (append loop (list (caddr rec)))
-                   curkey (dgm:rkey (caddr rec))
-                   edges (dgm:rm rec edges)
-                   found T))
-            ((= (dgm:rkey (caddr rec)) curkey)
-             (setq loop (append loop (list (cadr rec)))
-                   curkey (dgm:rkey (cadr rec))
-                   edges (dgm:rm rec edges)
-                   found T))))))
-    (if (= curkey startkey)
-      (setq loops (cons (dgm:dedup loop) loops))
-      (princ "\n[ΠΡΟΣΟΧΗ] Βρέθηκε ανοιχτή αλυσίδα πλευρών - πιθανή αστοχία ταύτισης κορυφών στα κοινά όρια.")))
+            ((null knext) (setq face nil))
+            ((and (= kcur (car d0)) (= knext (cdr d0)))
+             (setq guard 100000))
+            (t
+             (setq used (cons (strcat kcur ">" knext) used))
+             (setq face (append face (list knext)))
+             (setq kprev kcur kcur knext))))
+        (if face
+          (progn
+            (setq pts2 (dgm:dedup
+                         (mapcar '(lambda (k) (cdr (assoc k verts))) face)))
+            (if (and (> (length pts2) 2) (> (dgm:sarea pts2) 1e-9))
+              (setq loops (cons pts2 loops))))))))
   loops)
 
 ;; Επιλογή πολλών κλειστών polylines
@@ -1081,23 +1367,658 @@
       (if pt (dgm:text pt h (strcat "ΚΗΔ: " s) (getvar "CLAYER")))))
   (princ))
 
+;;; ============== ΕΡΓΑΛΕΙΑ ΡΟΗΣ ΕΡΓΑΣΙΑΣ (τύπου KtimaDGM) ===============
+
+;; Προσημασμένο εμβαδόν (θετικό = CCW)
+(defun dgm:sarea (pts / s n i p1 p2)
+  (setq s 0.0 n (length pts) i 0)
+  (while (< i n)
+    (setq p1 (nth i pts) p2 (nth (rem (1+ i) n) pts))
+    (setq s (+ s (- (* (car p1) (cadr p2)) (* (car p2) (cadr p1)))))
+    (setq i (1+ i)))
+  (/ s 2.0))
+
+;; Περίμετρος κλειστού πολυγώνου
+(defun dgm:perim (pts / s n i)
+  (setq s 0.0 n (length pts) i 0)
+  (while (< i n)
+    (setq s (+ s (distance (nth i pts) (nth (rem (1+ i) n) pts))))
+    (setq i (1+ i)))
+  s)
+
+;; Αντιπροσωπευτικό εσωτερικό σημείο κλειστού βρόχου
+(defun dgm:innerpt (pts / n i a b len mx my nx ny p)
+  (setq n (length pts) i 0 p nil)
+  (while (and (< i n) (null p))
+    (setq a (nth i pts) b (nth (rem (1+ i) n) pts))
+    (setq len (distance a b))
+    (if (> len 1e-9)
+      (progn
+        (setq mx (/ (+ (car a) (car b)) 2.0)
+              my (/ (+ (cadr a) (cadr b)) 2.0)
+              nx (/ (- (cadr a) (cadr b)) len)
+              ny (/ (- (car b) (car a)) len))
+        (foreach ee (list (* 0.01 len) (* 0.001 len) 0.005)
+          (if (null p)
+            (cond
+              ((dgm:inpoly (list (+ mx (* ee nx)) (+ my (* ee ny))) pts)
+               (setq p (list (+ mx (* ee nx)) (+ my (* ee ny)))))
+              ((dgm:inpoly (list (- mx (* ee nx)) (- my (* ee ny))) pts)
+               (setq p (list (- mx (* ee nx)) (- my (* ee ny))))))))))
+    (setq i (1+ i)))
+  p)
+
+;; Θέση σημείου πάνω στο περίγραμμα: (iedge . απόσταση από αρχή πλευράς) ή nil
+(defun dgm:onboundary (p pts tol / n i a b res)
+  (setq n (length pts) i 0 res nil)
+  (while (and (< i n) (null res))
+    (setq a (nth i pts) b (nth (rem (1+ i) n) pts))
+    (if (< (dgm:pseg p a b) tol)
+      (setq res (cons i (distance a p))))
+    (setq i (1+ i)))
+  res)
+
+;; Ελάχιστη απόσταση σημείου από περίγραμμα πολυγώνου
+(defun dgm:pmindist (p pts / n i a b d md)
+  (setq n (length pts) i 0 md 1e99)
+  (while (< i n)
+    (setq a (nth i pts) b (nth (rem (1+ i) n) pts))
+    (setq d (dgm:pseg p a b))
+    (if (< d md) (setq md d))
+    (setq i (1+ i)))
+  md)
+
+;; Μήκος κοινού ορίου βρόχου loop με πολύγωνο pts
+(defun dgm:sharedlen (loop pts tol / n i a b m tot)
+  (setq n (length loop) i 0 tot 0.0)
+  (while (< i n)
+    (setq a (nth i loop) b (nth (rem (1+ i) n) loop))
+    (setq m (list (/ (+ (car a) (car b)) 2.0)
+                  (/ (+ (cadr a) (cadr b)) 2.0)))
+    (if (< (dgm:pmindist m pts) tol)
+      (setq tot (+ tot (distance a b))))
+    (setq i (1+ i)))
+  tot)
+
+;; Κοπή κλειστού πολυγώνου pts με χορδή cpts (άκρα πάνω στο περίγραμμα)
+;; Επιστρέφει (pa pb) ή nil
+(defun dgm:splitchord (pts cpts tol / n pt1 pt2 e1 e2 i1 t1 i2 t2 mid
+                         fwd bwd j k pa pb)
+  (setq n (length pts)
+        pt1 (car cpts)
+        pt2 (last cpts))
+  (setq e1 (dgm:onboundary pt1 pts tol)
+        e2 (dgm:onboundary pt2 pts tol))
+  (if (and e1 e2 (> (length cpts) 1))
+    (progn
+      (setq i1 (car e1) t1 (cdr e1)
+            i2 (car e2) t2 (cdr e2))
+      (setq mid (reverse (cdr (reverse (cdr cpts)))))
+      (cond
+        ((and (= i1 i2) (< t1 t2)) (setq fwd nil))
+        ((= i1 i2)
+         (setq fwd nil j (rem (1+ i1) n) k 0)
+         (while (< k n)
+           (setq fwd (append fwd (list (nth j pts)))
+                 j (rem (1+ j) n) k (1+ k))))
+        (t
+         (setq fwd nil j (rem (1+ i1) n))
+         (while (/= j (rem (1+ i2) n))
+           (setq fwd (append fwd (list (nth j pts)))
+                 j (rem (1+ j) n)))))
+      (cond
+        ((and (= i1 i2) (> t1 t2)) (setq bwd nil))
+        ((= i1 i2)
+         (setq bwd nil j (rem (1+ i2) n) k 0)
+         (while (< k n)
+           (setq bwd (append bwd (list (nth j pts)))
+                 j (rem (1+ j) n) k (1+ k))))
+        (t
+         (setq bwd nil j (rem (1+ i2) n))
+         (while (/= j (rem (1+ i1) n))
+           (setq bwd (append bwd (list (nth j pts)))
+                 j (rem (1+ j) n)))))
+      (setq pa (dgm:dedup (append (list pt1) fwd (list pt2) (reverse mid))))
+      (setq pb (dgm:dedup (append (list pt2) bwd (list pt1) mid)))
+      (if (and (> (length pa) 2) (> (length pb) 2))
+        (list pa pb)))))
+
+;; Συγχρονισμένη εκτέλεση εντολής Windows
+(defun dgm:runsync (cmd / ok sh)
+  (setq ok nil)
+  (if vl-load-com (vl-load-com))
+  (if vlax-create-object
+    (progn
+      (setq sh (vlax-create-object "WScript.Shell"))
+      (if sh
+        (progn
+          (vlax-invoke-method sh 'Run cmd 0 :vlax-true)
+          (vlax-release-object sh)
+          (setq ok T)))))
+  (if (not ok)
+    (progn
+      (startapp cmd)
+      (getstring "\nΗ εντολή τρέχει σε παράθυρο cmd. Πατήστε Enter όταν ολοκληρωθεί... ")))
+  T)
+
+;; Επανακατασκευή polyline με νέες κορυφές
+(defun dgm:rebuild (e pts closed / lay)
+  (setq lay (cdr (assoc 8 (entget e))))
+  (entdel e)
+  (dgm:mkpoly pts lay closed))
+
+;; Συλλογή LWPOLYLINES από layers: λίστα από (ename pts closed)
+(defun dgm:collect (lays closedonly / ss i e out)
+  (setq out nil)
+  (foreach lay lays
+    (setq ss (ssget "_X" (list '(0 . "LWPOLYLINE") (cons 8 lay))))
+    (if ss
+      (progn
+        (setq i 0)
+        (while (< i (sslength ss))
+          (setq e (ssname ss i))
+          (if (or (not closedonly) (dgm:closedp e))
+            (setq out (cons (list e (dgm:lwpts e) (dgm:closedp e)) out)))
+          (setq i (1+ i))))))
+  out)
+
+;; Off/επαναφορά layer
+(defun dgm:layoff (nm / d)
+  (setq d (entget (tblobjname "LAYER" nm)))
+  (if d (entmod (subst (cons 62 (- (abs (cdr (assoc 62 d)))))
+                       (assoc 62 d) d))))
+(defun dgm:laycolor (nm col / d)
+  (setq d (entget (tblobjname "LAYER" nm)))
+  (if d (entmod (subst (cons 62 col) (assoc 62 d) d))))
+
+;;; DGMCLEAN - Αυτόματος καθαρισμός τυπικών σφαλμάτων (τύπου KTM_CleanUp)
+(defun dgm:cleangroup (items tol seed densifyp closep / allc pts new fix orig)
+  (setq dgm:*canon* nil fix 0)
+  (foreach p seed (dgm:canon p tol))
+  (setq items
+        (mapcar '(lambda (it)
+                   (list (car it)
+                         (mapcar '(lambda (p) (dgm:canon p tol)) (cadr it))
+                         (caddr it)))
+                items))
+  (setq allc dgm:*canon*)
+  (foreach it items
+    (setq orig (dgm:lwpts (car it)))
+    (setq pts (cadr it))
+    (setq new (if densifyp (dgm:densify pts allc tol) pts))
+    (setq new (dgm:dedup new))
+    (if (or (not (equal new orig 1e-9))
+            (and closep (not (caddr it))))
+      (progn
+        (dgm:rebuild (car it) new (if closep T (caddr it)))
+        (setq fix (1+ fix)))))
+  fix)
+
+(defun c:DGMCLEAN ( / tol fix seedt seedn)
+  (setq tol (dgm:getreal "\nΑνοχή καθαρισμού (m)" 0.001))
+  (setq fix 0)
+  ;; 1. PST_KAEK + DGM_PROP_FINAL: κλείσιμο, κούμπωμα κορυφών,
+  ;;    προσθήκη κορυφών στα κοινά όρια, διαγραφή διπλών
+  (setq fix (+ fix (dgm:cleangroup
+                     (dgm:collect '("PST_KAEK" "DGM_PROP_FINAL") nil)
+                     tol nil T T)))
+  ;; κορυφές-στόχοι για τις επόμενες ομάδες
+  (setq seedn nil)
+  (foreach it (dgm:collect '("PST_KAEK" "DGM_PROP_FINAL") nil)
+    (foreach p (cadr it) (setq seedn (cons p seedn))))
+  ;; 2. AREA_A / AREA_D: κούμπωμα στα PST/DGM + διαγραφή διπλών
+  (setq fix (+ fix (dgm:cleangroup (dgm:collect '("AREA_A" "AREA_D") nil)
+                                   tol seedn nil nil)))
+  ;; 3. BOUND_IMPL / BOUND_UNIMPL: κούμπωμα κορυφών
+  (setq fix (+ fix (dgm:cleangroup (dgm:collect '("BOUND_IMPL" "BOUND_UNIMPL") nil)
+                                   tol seedn nil nil)))
+  ;; 4. VST / BLD / EAS: κούμπωμα στο TOPO_PROP
+  (setq seedt nil)
+  (foreach it (dgm:collect '("TOPO_PROP") nil)
+    (foreach p (cadr it) (setq seedt (cons p seedt))))
+  (setq fix (+ fix (dgm:cleangroup (dgm:collect '("VST" "BLD" "EAS") nil)
+                                   tol seedt nil nil)))
+  ;; 5. VST_FINAL / EAS_FINAL: κούμπωμα στο TOPO_PROP_NEW (αλλιώς TOPO_PROP)
+  (setq seedn nil)
+  (foreach it (dgm:collect '("TOPO_PROP_NEW") nil)
+    (foreach p (cadr it) (setq seedn (cons p seedn))))
+  (if (null seedn) (setq seedn seedt))
+  (setq fix (+ fix (dgm:cleangroup (dgm:collect '("VST_FINAL" "EAS_FINAL") nil)
+                                   tol seedn nil nil)))
+  (princ (strcat "\nΚαθαρισμός ολοκληρώθηκε: διορθώθηκαν " (itoa fix)
+                 " polylines."))
+  (princ))
+
+;;; DGMORIGIN - Αλλαγή αρχής και φοράς κλειστής polyline
+(defun c:DGMORIGIN ( / en pts n p i bd best dir rot)
+  (setq en (dgm:sel-poly "\nΕπιλέξτε κλειστή polyline: "))
+  (cond
+    ((null en))
+    ((not (dgm:closedp en))
+     (princ "\n** Η polyline δεν είναι κλειστή. **"))
+    (t
+     (setq pts (dgm:lwpts en) n (length pts))
+     (setq p (getpoint "\nΕπιλέξτε τη νέα κορυφή αρχής: "))
+     (if p
+       (progn
+         (setq p (list (car p) (cadr p)))
+         (setq best 0 bd 1e99 i 0)
+         (while (< i n)
+           (if (< (distance p (nth i pts)) bd)
+             (setq bd (distance p (nth i pts)) best i))
+           (setq i (1+ i)))
+         (princ "\nΦορά:  1 = CW (δεξιόστροφα)   2 = CCW (αριστερόστροφα)")
+         (setq dir (dgm:getint "\nΕπιλογή" 1))
+         (setq rot nil i 0)
+         (while (< i n)
+           (setq rot (append rot (list (nth (rem (+ best i) n) pts))))
+           (setq i (1+ i)))
+         (if (or (and (= dir 1) (> (dgm:sarea rot) 0))
+                 (and (= dir 2) (< (dgm:sarea rot) 0)))
+           (setq rot (cons (car rot) (reverse (cdr rot)))))
+         (dgm:rebuild en rot T)
+         (princ "\nΕνημερώθηκαν η αρχή και η φορά της polyline.")))))
+  (princ))
+
+;;; DGMBND / DGMBNDPD - Πολύγωνο από εσωτερικό σημείο (τύπου KTM_GetBoundary)
+(defun dgm:boundary-core (lay / pt eb old cnt made)
+  (dgm:layer-std lay)
+  (setq old (getvar "CLAYER"))
+  (setvar "CLAYER" lay)
+  (setq cnt 0 made nil)
+  (setq pt (getpoint "\nΕπιλέξτε εσωτερικό σημείο (Enter για τέλος): "))
+  (while pt
+    (setq eb (entlast))
+    (command "_.-BOUNDARY" pt "")
+    (if (not (eq eb (entlast)))
+      (progn
+        (setq cnt (1+ cnt))
+        (setq made (cons (entlast) made)))
+      (princ "\n** Δεν δημιουργήθηκε πολύγωνο στο σημείο αυτό. **"))
+    (setq pt (getpoint "\nΕπόμενο εσωτερικό σημείο (Enter για τέλος): ")))
+  (setvar "CLAYER" old)
+  (princ (strcat "\nΔημιουργήθηκαν " (itoa cnt) " πολύγωνα στο layer " lay "."))
+  made)
+
+(defun c:DGMBND ( / lay made ans polys loops)
+  (setq lay (dgm:getstr "\nLayer αποτελέσματος" "DGM_PROP_FINAL"))
+  (setq made (dgm:boundary-core lay))
+  (if (> (length made) 1)
+    (progn
+      (princ "\nΣυνένωση των πολυγώνων που δημιουργήθηκαν;  1 = Όχι   2 = Ναι")
+      (setq ans (dgm:getint "\nΕπιλογή" 1))
+      (if (= ans 2)
+        (progn
+          (setq polys (mapcar 'dgm:lwpts made))
+          (setq loops (dgm:xorloops polys 0.001))
+          (if (= 1 (length loops))
+            (progn
+              (foreach e made (entdel e))
+              (dgm:mkpoly (car loops) lay T)
+              (princ "\nΈγινε συνένωση σε ενιαίο πολύγωνο."))
+            (princ "\n** Τα πολύγωνα δεν είναι όμορα - δεν έγινε συνένωση. **"))))))
+  (princ))
+
+(defun c:DGMBNDPD ( / states l nm)
+  (dgm:layer-std "PST_KAEK")
+  (dgm:layer-std "DGM_PROP_FINAL")
+  (setq states nil)
+  (setq l (tblnext "LAYER" T))
+  (while l
+    (setq nm (cdr (assoc 2 l)))
+    (setq states (cons (cons nm (cdr (assoc 62 l))) states))
+    (if (and (/= nm "PST_KAEK") (/= nm "DGM_PROP_FINAL"))
+      (dgm:layoff nm))
+    (setq l (tblnext "LAYER")))
+  (dgm:boundary-core "DGM_PROP_FINAL")
+  (foreach s states (dgm:laycolor (car s) (cdr s)))
+  (princ))
+
+;;; DGMKAT / DGMVST - Υποδιαίρεση πολυγώνων με γραμμές κοπής
+(defun dgm:katcore (srclays cutlay outlay tol
+                    / cuts work lpts item res newwork found cnt mp fin)
+  (setq cuts (dgm:collect (list cutlay) nil))
+  (setq work nil)
+  (foreach item (dgm:collect srclays nil)
+    (if (caddr item)
+      (setq work (cons (list (cadr item) nil) work))))
+  (cond
+    ((null cuts)
+     (princ (strcat "\n** Δεν βρέθηκαν γραμμές στο layer " cutlay ". **")))
+    ((null work)
+     (princ "\n** Δεν βρέθηκαν κλειστά πολύγωνα πηγής. **"))
+    (t
+     (setq cnt 0)
+     (foreach ln cuts
+       (setq lpts (cadr ln) found nil newwork nil)
+       (setq mp (if (> (length lpts) 2)
+                  (nth (/ (length lpts) 2) lpts)
+                  (list (/ (+ (car (car lpts)) (car (last lpts))) 2.0)
+                        (/ (+ (cadr (car lpts)) (cadr (last lpts))) 2.0))))
+       (foreach item work
+         (if (and (not found)
+                  (dgm:onboundary (car lpts) (car item) tol)
+                  (dgm:onboundary (last lpts) (car item) tol)
+                  (dgm:inpoly mp (car item)))
+           (progn
+             (setq res (dgm:splitchord (car item) lpts tol))
+             (if res
+               (progn
+                 (setq newwork (cons (list (car res) T)
+                                     (cons (list (cadr res) T) newwork)))
+                 (setq found T cnt (1+ cnt)))
+               (setq newwork (cons item newwork))))
+           (setq newwork (cons item newwork))))
+       (setq work newwork)
+       (if (not found)
+         (progn
+           (princ "\n[ΠΡΟΣΟΧΗ] Γραμμή κοπής χωρίς αντιστοίχιση: τα άκρα της πρέπει")
+           (princ "\n          να ακουμπούν στο περίγραμμα πολυγώνου πηγής."))))
+     (dgm:layer-std outlay)
+     (setq fin 0)
+     (foreach item work
+       (if (cadr item)
+         (progn
+           (dgm:mkpoly (car item) outlay T)
+           (setq fin (1+ fin)))))
+     (princ (strcat "\nΕκτελέστηκαν " (itoa cnt) " κοπές - δημιουργήθηκαν "
+                    (itoa fin) " πολύγωνα στο layer " outlay ".")))))
+
+(defun c:DGMKAT ( / tol)
+  (setq tol (dgm:getreal "\nΑνοχή (m)" 0.001))
+  (dgm:katcore '("PST_KAEK") "LINE_XM" "DGM_PROP_FINAL" tol)
+  (princ "\nΥπενθύμιση: τοποθετήστε κείμενα ΝΕΟ ... (layer PST_KAEK) στα νέα πολύγωνα.")
+  (princ))
+
+(defun c:DGMVST ( / tol)
+  (setq tol (dgm:getreal "\nΑνοχή (m)" 0.001))
+  (dgm:katcore '("PST_KAEK" "DGM_PROP_FINAL") "LINE_XM_VST" "VST_FINAL" tol)
+  (princ))
+
+;;; DGMGM - Αυτόματη συμπλήρωση DGM_PROP_FINAL από PST_KAEK (KTM_ComputeDgmFromPst)
+(defun c:DGMGM ( / tol pst dgmp texts loops loop has best bl len d cnt mrg
+                  ss i dd merged)
+  (setq tol (dgm:getreal "\nΑνοχή (m)" 0.001))
+  (setq pst nil)
+  (foreach it (dgm:collect '("PST_KAEK") nil)
+    (if (caddr it) (setq pst (cons (cadr it) pst))))
+  (setq dgmp nil)
+  (foreach it (dgm:collect '("DGM_PROP_FINAL") nil)
+    (if (caddr it) (setq dgmp (cons (cons (car it) (cadr it)) dgmp))))
+  (setq texts nil)
+  (setq ss (ssget "_X" '((0 . "TEXT,MTEXT") (8 . "PST_KAEK"))))
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq dd (entget (ssname ss i)))
+        (setq texts (cons (list (cadr (assoc 10 dd)) (caddr (assoc 10 dd)))
+                          texts))
+        (setq i (1+ i)))))
+  (cond
+    ((null pst) (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα PST_KAEK. **"))
+    ((null dgmp) (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα DGM_PROP_FINAL. **"))
+    (t
+     (setq loops (dgm:xorloops (append pst (mapcar 'cdr dgmp)) tol))
+     (dgm:layer-std "DGM_PROP_FINAL")
+     (setq cnt 0 mrg 0)
+     (foreach loop loops
+       (setq has nil)
+       (foreach tx texts
+         (if (dgm:inpoly tx loop) (setq has T)))
+       (if has
+         (progn
+           (dgm:mkpoly loop "DGM_PROP_FINAL" T)
+           (setq cnt (1+ cnt)))
+         (progn
+           (setq best nil bl 0.0)
+           (foreach d dgmp
+             (setq len (dgm:sharedlen loop (cdr d) tol))
+             (if (> len bl) (setq bl len best d)))
+           (if best
+             (progn
+               (setq merged (dgm:xorloops (list loop (cdr best)) tol))
+               (if (= 1 (length merged))
+                 (progn
+                   (entdel (car best))
+                   (dgm:mkpoly (car merged) "DGM_PROP_FINAL" T)
+                   (setq dgmp (subst (cons (entlast) (car merged)) best dgmp))
+                   (setq mrg (1+ mrg)))
+                 (princ "\n[ΠΡΟΣΟΧΗ] Αποτυχία αυτόματης συνένωσης υπολοίπου - ελέγξτε χειροκίνητα.")))
+             (princ "\n[ΠΡΟΣΟΧΗ] Υπόλοιπο χωρίς ΚΑΕΚ και χωρίς όμορο DGM_PROP_FINAL.")))))
+     (princ (strcat "\nΔημιουργήθηκαν " (itoa cnt)
+                    " νέα πολύγωνα DGM_PROP_FINAL και " (itoa mrg)
+                    " υπόλοιπα συνενώθηκαν με όμορα."))))
+  (princ))
+
+;;; DGMAREAS - Αυτόματη δημιουργία AREA_A/AREA_D (KTM_CreateAreas)
+(defun dgm:countlabels (lay / ss)
+  (setq ss (ssget "_X" (list '(0 . "TEXT,MTEXT") (cons 8 lay))))
+  (if ss (sslength ss) 0))
+
+(defun c:DGMAREAS ( / tol h minw e1 e2 p d loops loop ip inp ind na nd w nm ar)
+  (setq e1 (dgm:sel-poly "\nΕπιλέξτε το πολύγωνο PST_KAEK της ιδιοκτησίας: "))
+  (setq e2 (if e1 (dgm:sel-poly "\nΕπιλέξτε το πολύγωνο DGM_PROP_FINAL της ιδιοκτησίας: ")))
+  (if (and e1 e2)
+    (if (or (not (dgm:closedp e1)) (not (dgm:closedp e2)))
+      (princ "\n** Και τα δύο πολύγωνα πρέπει να είναι κλειστά. **")
+      (progn
+        (setq tol (dgm:getreal "\nΑνοχή (m)" 0.001))
+        (setq h (dgm:getreal "\nΎψος χαρακτήρων ετικετών" dgm:*h*))
+        (setq dgm:*h* h)
+        (setq minw (dgm:getreal "\nΔιαγραφή πολυγώνων με πλάτος <" 0.01))
+        (setq p (dgm:lwpts e1)
+              d (dgm:lwpts e2))
+        (setq loops (dgm:xorloops (list p d) tol))
+        (dgm:layer-std "AREA_A")
+        (dgm:layer-std "AREA_D")
+        (dgm:layer-std "AREA_A-labels")
+        (dgm:layer-std "AREA_D-labels")
+        (setq na (1+ (dgm:countlabels "AREA_A-labels"))
+              nd (1+ (dgm:countlabels "AREA_D-labels")))
+        (foreach loop loops
+          (setq ar (dgm:area loop)
+                w (if (> (dgm:perim loop) 1e-9)
+                    (/ (* 2.0 ar) (dgm:perim loop))
+                    0.0))
+          (if (< w minw)
+            (princ (strcat "\n[INFO] Παραλείφθηκε τμήμα με πλάτος "
+                           (rtos w 2 3) " m (όριο " (rtos minw 2 3) " m)."))
+            (progn
+              (setq ip (dgm:innerpt loop))
+              (setq inp (and ip (dgm:inpoly ip p))
+                    ind (and ip (dgm:inpoly ip d)))
+              (cond
+                ((and inp (not ind))
+                 (setq nm (strcat "ΤΜΗΜΑ Α" (itoa na)) na (1+ na))
+                 (dgm:mkpoly loop "AREA_A" T)
+                 (if ip (dgm:textc ip h nm "AREA_A-labels"))
+                 (princ (strcat "\n" nm " (αποκοπτόμενο): "
+                                (rtos ar 2 2) " τ.μ.")))
+                ((and ind (not inp))
+                 (setq nm (strcat "ΤΜΗΜΑ Δ" (itoa nd)) nd (1+ nd))
+                 (dgm:mkpoly loop "AREA_D" T)
+                 (if ip (dgm:textc ip h nm "AREA_D-labels"))
+                 (princ (strcat "\n" nm " (διεκδικούμενο): "
+                                (rtos ar 2 2) " τ.μ.")))
+                ((and inp ind)
+                 (princ (strcat "\n[INFO] Κοινό τμήμα (εντός και των δύο): "
+                                (rtos ar 2 2) " τ.μ. - παραλείπεται.")))
+                (t
+                 (princ "\n[ΠΡΟΣΟΧΗ] Τμήμα με ασαφή χαρακτηρισμό - τοποθετήθηκε στο DGM_CHECK.")
+                 (dgm:layer "DGM_CHECK" 1)
+                 (dgm:mkpoly loop "DGM_CHECK" T))))))
+        (princ "\nΟλοκληρώθηκε η δημιουργία AREA_A/AREA_D."))))
+  (princ))
+
+;;; DGMCOPY - Αντιγραφή γραμμών TOPO_PROP σε άλλα layers
+(defun c:DGMCOPY ( / typ src dst ss i e cnt)
+  (princ "\nΑντιγραφή όλων των γραμμών TOPO_PROP σε:")
+  (princ "\n  1 = DGM_PROP_FINAL   2 = BOUND_IMPL   3 = BOUND_UNIMPL")
+  (setq typ (dgm:getint "\nΕπιλογή" 1))
+  (setq src "TOPO_PROP"
+        dst (cond ((= typ 2) "BOUND_IMPL")
+                  ((= typ 3) "BOUND_UNIMPL")
+                  (t "DGM_PROP_FINAL")))
+  (dgm:layer-std dst)
+  (setq ss (ssget "_X" (list '(0 . "LWPOLYLINE") (cons 8 src)))
+        cnt 0)
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq e (ssname ss i))
+        (dgm:mkpoly (dgm:lwpts e) dst (dgm:closedp e))
+        (setq cnt (1+ cnt))
+        (setq i (1+ i)))))
+  (princ (strcat "\nΑντιγράφηκαν " (itoa cnt) " polylines από " src
+                 " στο " dst "."))
+  (princ))
+
+;;; DGMTXT - Εξαγωγή συντεταγμένων κορυφών σε αρχείο TXT
+(defun c:DGMTXT ( / f fn ss i e pts h nn)
+  (princ "\nΕξαγωγή συντεταγμένων κορυφών επιλεγμένων polylines σε αρχείο TXT.")
+  (setq ss (ssget '((0 . "LWPOLYLINE"))))
+  (if ss
+    (progn
+      (setq fn (getfiled "Αποθήκευση συντεταγμένων" "" "txt" 1))
+      (if fn
+        (progn
+          (setq f (open fn "w"))
+          (dgm:marks-load)
+          (setq h (if dgm:*h* dgm:*h* 0.5))
+          (setq i 0)
+          (while (< i (sslength ss))
+            (setq e (ssname ss i)
+                  pts (dgm:lwpts e))
+            (foreach p pts
+              (setq nn (dgm:findnum p (* 2.5 h)))
+              (write-line (strcat (if nn nn "-") "\t"
+                                  (rtos (car p) 2 3) "\t"
+                                  (rtos (cadr p) 2 3))
+                          f))
+            (setq i (1+ i)))
+          (close f)
+          (princ (strcat "\nΓράφτηκε το αρχείο: " fn))))))
+  (princ))
+
+;;; DGMPREP - Προετοιμασία σχεδίου για υποβολή (KTM_PrepareDwg)
+(defun dgm:hasxref ( / b r)
+  (setq b (tblnext "BLOCK" T) r nil)
+  (while b
+    (if (= 4 (logand 4 (cdr (assoc 70 b)))) (setq r T))
+    (setq b (tblnext "BLOCK")))
+  r)
+
+(defun dgm:delall (etype / ss i cnt)
+  (setq ss (ssget "_X" (list (cons 0 etype))) cnt 0)
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (entdel (ssname ss i))
+        (setq cnt (1+ cnt) i (1+ i)))))
+  cnt)
+
+(defun c:DGMPREP ( / a1 a2 a3 a4 ax ss i n)
+  (princ "\nΠροετοιμασία σχεδίου για υποβολή (1 = Ναι, 0 = Όχι):")
+  (setq a1 (dgm:getint "\nΔιαγραφή εικόνων (Images)" 1))
+  (setq a2 (dgm:getint "\nΔιάλυση blocks (Explode)" 1))
+  (setq a3 (dgm:getint "\nΔιαγραφή αντικειμένων OLE" 1))
+  (setq a4 (dgm:getint "\nΔιαγραφή Proxy entities" 1))
+  (princ "\nXrefs:  0 = καμία ενέργεια   1 = Detach όλα   2 = Bind όλα")
+  (setq ax (dgm:getint "\nΕπιλογή" 1))
+  (if (= a1 1)
+    (princ (strcat "\nΔιαγράφηκαν " (itoa (dgm:delall "IMAGE")) " εικόνες.")))
+  (if (= a3 1)
+    (princ (strcat "\nΔιαγράφηκαν " (itoa (dgm:delall "OLE2FRAME")) " OLE.")))
+  (if (= a4 1)
+    (princ (strcat "\nΔιαγράφηκαν "
+                   (itoa (dgm:delall "ACAD_PROXY_ENTITY")) " proxies.")))
+  (if (= a2 1)
+    (progn
+      (setq n 0)
+      (setq ss (ssget "_X" '((0 . "INSERT"))))
+      (while (and ss (< n 5))
+        (setq i 0)
+        (while (< i (sslength ss))
+          (command "_.EXPLODE" (ssname ss i))
+          (setq i (1+ i)))
+        (setq n (1+ n))
+        (setq ss (ssget "_X" '((0 . "INSERT")))))
+      (princ "\nΈγινε διάλυση των blocks.")))
+  (if (and (/= ax 0) (dgm:hasxref))
+    (if (= ax 2)
+      (command "_.-XREF" "_B" "*")
+      (command "_.-XREF" "_D" "*")))
+  (princ "\nΗ προετοιμασία ολοκληρώθηκε. Εκτελέστε DGMC για τελικό έλεγχο.")
+  (princ))
+
+;;; DGMZIP - Δημιουργία ZIP παραδοτέων (DXF + υπογεγραμμένο PDF)
+(defun c:DGMZIP ( / dxf pdf zip cmd)
+  (setq dxf (getfiled "Επιλογή αρχείου DXF" "" "dxf" 0))
+  (setq pdf (if dxf (getfiled "Επιλογή υπογεγραμμένου PDF" "" "pdf" 0)))
+  (if (and dxf pdf)
+    (progn
+      (setq zip (strcat (substr dxf 1 (- (strlen dxf) 4)) ".zip"))
+      (setq cmd (strcat "powershell -NoProfile -Command \"Compress-Archive -Force -LiteralPath '"
+                        dxf "','" pdf "' -DestinationPath '" zip "'\""))
+      (dgm:runsync cmd)
+      (if (findfile zip)
+        (princ (strcat "\nΔημιουργήθηκε το αρχείο παράδοσης: " zip))
+        (princ "\n** Το ZIP δεν δημιουργήθηκε - ελέγξτε τα ονόματα αρχείων. **"))))
+  (princ))
+
+;;; DGMSIGN - ’νοιγμα του PDF στο JSignPdf για ψηφιακή υπογραφή
+(defun c:DGMSIGN ( / js pdf)
+  (setq js (getenv "GFD_JSIGNPDF"))
+  (if (or (null js) (null (findfile js)))
+    (progn
+      (princ "\nΕντοπίστε το εκτελέσιμο του JSignPdf (μία φορά - αποθηκεύεται).")
+      (setq js (getfiled "Εντοπισμός JSignPdf.exe" "" "exe" 0))
+      (if js (setenv "GFD_JSIGNPDF" js))))
+  (if js
+    (progn
+      (setq pdf (getfiled "PDF προς υπογραφή" "" "pdf" 0))
+      (if pdf
+        (progn
+          (startapp (strcat "\"" js "\"") (strcat "\"" pdf "\""))
+          (princ "\n’νοιξε το JSignPdf. Υπογράψτε το PDF και μετά εκτελέστε DGMZIP.")))))
+  (princ))
+
 ;;; DGMHELP - Βοήθεια
 (defun c:DGMHELP ()
-  (princ "\n--------------- Εντολές ΔΓΜ ---------------")
-  (princ "\nDGML     Δημιουργία τυποποιημένων layers")
-  (princ "\nDGMK     Αρίθμηση κορυφών polyline")
-  (princ "\nDGMP     Πίνακας συντεταγμένων κορυφών")
-  (princ "\nDGME     Πίνακας αρχικών/τελικών εμβαδών")
-  (princ "\nDGMT     Πίνακας για τη διόρθωση των γεωτεμαχίων")
-  (princ "\nDGMA     Χαρακτηρισμός τμήματος (Α/Δ) + ετικέτα")
-  (princ "\nDGMKAEK  Τοποθέτηση κειμένου ΚΑΕΚ")
-  (princ "\nDGMSPLIT Κατάτμηση πολυγώνου με γραμμή κοπής")
-  (princ "\nDGMUNION Συνένωση όμορων πολυγώνων")
-  (princ "\nDGMCUT   Αποκοπή τμήματος από γεωτεμάχιο")
-  (princ "\nDGMC     Έλεγχοι ορθότητας πριν την υποβολή")
-  (princ "\nDGMHASH  Hash SHA512 αρχείου DXF")
-  (princ "\nDGMKHD   Τοποθέτηση ΚΗΔ στο σχέδιο")
-  (princ "\n--------------------------------------------")
+  (princ "\n----------------- Εντολές GF-DGM -----------------")
+  (princ "\nΠροετοιμασία:")
+  (princ "\n  DGML      Δημιουργία layers ανά τύπο διαγράμματος")
+  (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
+  (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
+  (princ "\nΠολύγωνα:")
+  (princ "\n  DGMBND    Πολύγωνο από εσωτερικό σημείο")
+  (princ "\n  DGMBNDPD  Πολύγωνο από σημείο (μόνο PST_KAEK/DGM_PROP_FINAL)")
+  (princ "\n  DGMKAT    DGM_PROP_FINAL: κατάτμηση PST_KAEK με LINE_XM")
+  (princ "\n  DGMGM     DGM_PROP_FINAL: αυτόματα υπόλοιπα από PST_KAEK")
+  (princ "\n  DGMVST    VST_FINAL από LINE_XM_VST")
+  (princ "\n  DGMAREAS  Αυτόματη δημιουργία AREA_A / AREA_D")
+  (princ "\n  DGMSPLIT  Κατάτμηση πολυγώνου με γραμμή κοπής")
+  (princ "\n  DGMUNION  Συνένωση όμορων πολυγώνων")
+  (princ "\n  DGMCUT    Αποκοπή τμήματος από γεωτεμάχιο")
+  (princ "\n  DGMA      Χειροκίνητος χαρακτηρισμός τμήματος Α/Δ")
+  (princ "\n  DGMCOPY   Αντιγραφή TOPO_PROP σε άλλα layers")
+  (princ "\nΑρίθμηση - Πίνακες:")
+  (princ "\n  DGMK      Αρίθμηση κορυφών polyline")
+  (princ "\n  DGMORIGIN Αλλαγή αρχής/φοράς κλειστής polyline")
+  (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών")
+  (princ "\n  DGME      Πίνακας αρχικών/τελικών εμβαδών")
+  (princ "\n  DGMT      Πίνακας για τη διόρθωση των γεωτεμαχίων")
+  (princ "\n  DGMTXT    Εξαγωγή συντεταγμένων σε TXT")
+  (princ "\nΠαραδοτέα:")
+  (princ "\n  DGMPREP   Προετοιμασία σχεδίου (images/blocks/OLE/xrefs)")
+  (princ "\n  DGMHASH   Hash SHA512 αρχείου DXF")
+  (princ "\n  DGMKHD    Τοποθέτηση ΚΗΔ στο σχέδιο")
+  (princ "\n  DGMSIGN   Υπογραφή PDF με JSignPdf")
+  (princ "\n  DGMZIP    ZIP παραδοτέων (DXF + υπογεγραμμένο PDF)")
+  (princ "\n---------------------------------------------------")
   (princ))
 
 (princ "\nDGM.lsp: Φορτώθηκαν τα εργαλεία ΔΓΜ. Πληκτρολογήστε DGMHELP για λίστα εντολών.")
