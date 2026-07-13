@@ -26,7 +26,7 @@
 [->4. Έλεγχος]
   [<-Έλεγχος διαγράμματος πριν την υποβολή (DGMC)]^C^C_DGMC
 [->5. Εξαγωγή - Υποβολή]
-  [Hash (MD5/SHA256) αρχείου DXF (DGMHASH)]^C^C_DGMHASH
+  [Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
   [<-Τοποθέτηση ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
 [--]
 [Λίστα εντολών (DGMHELP)]^C^C_DGMHELP

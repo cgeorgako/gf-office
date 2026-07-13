@@ -1025,14 +1025,12 @@
     (setq i (1+ i)))
   out)
 
-;;; DGMHASH - Υπολογισμός hash (MD5/SHA256) αρχείου DXF μέσω certutil
-(defun c:DGMHASH ( / dxf alg algname tmp cmd ok sh f line hash pt h)
+;;; DGMHASH - Υπολογισμός hash SHA512 αρχείου DXF μέσω certutil
+(defun c:DGMHASH ( / dxf algname tmp cmd ok sh f line hash pt h)
   (setq dxf (getfiled "Επιλογή αρχείου DXF" "" "dxf" 0))
   (if dxf
     (progn
-      (princ "\nΑλγόριθμος:  1 = MD5   2 = SHA256")
-      (setq alg (dgm:getint "\nΕπιλογή" 1))
-      (setq algname (if (= alg 2) "SHA256" "MD5"))
+      (setq algname "SHA512")
       (setq tmp (strcat (getenv "TEMP") "\\dgm_hash.txt"))
       (setq cmd (strcat "cmd /c certutil -hashfile \"" dxf "\" " algname
                         " > \"" tmp "\""))
@@ -1059,7 +1057,7 @@
           (setq line (read-line f))          ; γραμμή με το hash
           (close f)
           (if line (setq hash (dgm:nospace line)))))
-      (if (and hash (or (= 32 (strlen hash)) (= 64 (strlen hash))))
+      (if (and hash (= 128 (strlen hash)))
         (progn
           (princ (strcat "\n" algname ": " hash))
           (setq pt (getpoint "\nΘέση κειμένου hash στο σχέδιο (Enter για παράλειψη): "))
@@ -1097,7 +1095,7 @@
   (princ "\nDGMUNION Συνένωση όμορων πολυγώνων")
   (princ "\nDGMCUT   Αποκοπή τμήματος από γεωτεμάχιο")
   (princ "\nDGMC     Έλεγχοι ορθότητας πριν την υποβολή")
-  (princ "\nDGMHASH  Hash (MD5/SHA256) αρχείου DXF")
+  (princ "\nDGMHASH  Hash SHA512 αρχείου DXF")
   (princ "\nDGMKHD   Τοποθέτηση ΚΗΔ στο σχέδιο")
   (princ "\n--------------------------------------------")
   (princ))
