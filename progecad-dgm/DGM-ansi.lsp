@@ -2016,6 +2016,160 @@
           (princ "\n’νοιξε το JSignPdf. Υπογράψτε το PDF και μετά εκτελέστε DGMZIP.")))))
   (princ))
 
+;;; ============= ΜΑΖΙΚΗ ΠΑΡΑΓΩΓΗ ΠΙΝΑΚΩΝ ΣΥΝΤΕΤΑΓΜΕΝΩΝ =================
+
+;; Κείμενα του layer PST_KAEK ως λίστα ((x y) . string)
+(defun dgm:kaektexts ( / ss i d out)
+  (setq out nil
+        ss (ssget "_X" '((0 . "TEXT,MTEXT") (8 . "PST_KAEK"))))
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq d (entget (ssname ss i)))
+        (setq out (cons (cons (list (cadr (assoc 10 d)) (caddr (assoc 10 d)))
+                              (cdr (assoc 1 d)))
+                        out))
+        (setq i (1+ i)))))
+  out)
+
+;; Ο ΚΑΕΚ (ή οι ΚΑΕΚ, ενωμένοι με " / ") που βρίσκονται εντός του πολυγώνου
+(defun dgm:kaekof (pts ktexts / out tx)
+  (setq out nil)
+  (foreach tx ktexts
+    (if (dgm:inpoly (car tx) pts)
+      (setq out (cons (cdr tx) out))))
+  (cond
+    ((null out) nil)
+    ((= 1 (length out)) (car out))
+    (t (apply 'strcat
+              (cons (car out)
+                    (mapcar '(lambda (s) (strcat " / " s)) (cdr out)))))))
+
+;;; DGMPALL - Αυτόματη παραγωγή πινάκων συντεταγμένων για όλες τις
+;;; επιλεγμένες polylines. Τίτλος: layer + ΚΑΕΚ (από το κείμενο PST_KAEK
+;;; εντός του πολυγώνου). Οι αριθμοί κορυφών διαβάζονται από τα σημάδια
+;;; της DGMK. Οι πίνακες στοιβάζονται αυτόματα ο ένας κάτω από τον άλλον.
+(defun c:DGMPALL ( / ss h maxr ins ktexts ord items pair rec e lay pts nums
+                     n miss kaek title rows row len ng rowsper mrows heads
+                     wids g idx y hh i p cnt)
+  (princ "\nΕπιλέξτε polylines για παραγωγή πινάκων: ")
+  (setq ss (ssget '((0 . "LWPOLYLINE"))))
+  (if ss
+    (progn
+      (setq h (dgm:getreal "\nΎψος κειμένου πινάκων" dgm:*h*))
+      (setq dgm:*h* h)
+      (setq maxr (dgm:getint "\nΜέγιστες γραμμές ανά ομάδα στηλών" 30))
+      (setq ins (getpoint "\nΣημείο εισαγωγής πινάκων (πάνω αριστερή γωνία): "))
+      (if ins
+        (progn
+          (dgm:marks-load)
+          (setq ktexts (dgm:kaektexts))
+          (dgm:layer-std "pinakas_sintetagmenon")
+          ;; σειρά πινάκων κατά προτεραιότητα layer (όπως το KtimaDGM)
+          (setq ord '("PST_KAEK" "DGM_PROP_FINAL" "AREA_A" "AREA_D"
+                      "TOPO_PROP" "TOPO_PROP_NEW" "BLD" "LINE_XM" "VST"
+                      "VST_FINAL" "EAS" "EAS_FINAL" "LINE_XM_VST"))
+          (setq items nil i 0)
+          (while (< i (sslength ss))
+            (setq e (ssname ss i))
+            (setq lay (cdr (assoc 8 (entget e))))
+            (setq items (cons (cons (- (length ord)
+                                       (length (member lay ord)))
+                                    (list e lay))
+                              items))
+            (setq i (1+ i)))
+          (setq items (dgm:sortpairs (reverse items)))
+          (setq y (cadr ins) cnt 0)
+          (foreach pair items
+            (setq rec (cdr pair)
+                  e   (car rec)
+                  lay (cadr rec))
+            (setq pts (dgm:lwpts e))
+            ;; αριθμοί κορυφών από τα σημάδια της DGMK
+            (setq nums nil miss 0)
+            (foreach p pts
+              (setq n (dgm:findnum p (* 2.5 h)))
+              (if (null n) (setq n "-" miss (1+ miss)))
+              (setq nums (cons n nums)))
+            (setq nums (reverse nums))
+            (if (> miss 0)
+              (princ (strcat "\n[ΠΡΟΣΟΧΗ] " lay ": " (itoa miss)
+                             " κορυφές χωρίς αρίθμηση - εκτελέστε πρώτα DGMK.")))
+            ;; ΚΑΕΚ εντός του πολυγώνου
+            (setq kaek (if (dgm:closedp e) (dgm:kaekof pts ktexts)))
+            (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ " lay
+                                (cond
+                                  (kaek (strcat " - ΚΑΕΚ " kaek))
+                                  ((dgm:closedp e) " - ΑΓΝΩΣΤΟ ΚΑΕΚ")
+                                  (t ""))))
+            ;; γραμμές πίνακα
+            (setq rows nil i 0)
+            (while (< i (length pts))
+              (setq p (nth i pts))
+              (setq rows
+                    (cons (list (nth i nums)
+                                (rtos (car p) 2 3)
+                                (rtos (cadr p) 2 3)
+                                (if (> i 0)
+                                  (strcat (nth (1- i) nums) " - " (nth i nums)
+                                          ": "
+                                          (rtos (distance (nth (1- i) pts) p) 2 2))
+                                  ""))
+                          rows))
+              (setq i (1+ i)))
+            (setq rows (reverse rows))
+            (if (dgm:closedp e)
+              (setq rows
+                    (append rows
+                            (list (list "" "" ""
+                                        (strcat (last nums) " - " (car nums)
+                                                ": "
+                                                (rtos (distance (last pts) (car pts)) 2 2)))))))
+            ;; σπάσιμο σε ομάδες στηλών
+            (setq len (length rows)
+                  ng (1+ (/ (1- len) maxr))
+                  rowsper (1+ (/ (1- len) ng)))
+            (setq mrows nil i 0)
+            (while (< i rowsper)
+              (setq row nil g 0)
+              (while (< g ng)
+                (setq idx (+ i (* g rowsper)))
+                (setq row (append row
+                                  (if (< idx len)
+                                    (nth idx rows)
+                                    (list "" "" "" ""))))
+                (setq g (1+ g)))
+              (setq mrows (cons row mrows))
+              (setq i (1+ i)))
+            (setq mrows (reverse mrows))
+            (setq heads nil wids nil g 0)
+            (while (< g ng)
+              (setq heads (append heads
+                                  (list (list "Σημείο") (list "Χ") (list "Y")
+                                        (list "Αποστάσεις"))))
+              (setq wids (append wids
+                                 (list (* 8 h) (* 16 h) (* 16 h) (* 17 h))))
+              (setq g (1+ g)))
+            ;; σχεδίαση πίνακα
+            (dgm:table (list (car ins) y) title heads wids mrows h
+                       "pinakas_sintetagmenon"
+                       (if (and (dgm:closedp e) (> (length pts) 2))
+                         (strcat "Ε (" (car nums) ",...," (last nums) ", "
+                                 (car nums) "): "
+                                 (rtos (dgm:area pts) 2 2) " τ.μ.")
+                         nil))
+            (setq cnt (1+ cnt))
+            ;; μετατόπιση για τον επόμενο πίνακα
+            (setq hh (+ (* 2.4 h)
+                        (* 2.7 h)
+                        (* 2.0 h (length mrows))
+                        (if (dgm:closedp e) (* 2.0 h) 0.0)
+                        (* 4.0 h)))
+            (setq y (- y hh)))
+          (princ (strcat "\nΔημιουργήθηκαν " (itoa cnt) " πίνακες."))))))
+  (princ))
+
 ;;; ================= ΚΛΙΜΑΚΑ - ΚΑΝΑΒΟΣ - ΒΟΡΡΑΣ =========================
 
 ;; Ερώτηση κλίμακας σχεδίασης - επιστρέφει και αποθηκεύει τον παρονομαστή
@@ -2144,7 +2298,8 @@
   (princ "\nΑρίθμηση - Πίνακες:")
   (princ "\n  DGMK      Μαζική αρίθμηση κορυφών (κοινές κορυφές = ένας αριθμός)")
   (princ "\n  DGMORIGIN Αλλαγή αρχής/φοράς κλειστής polyline")
-  (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών")
+  (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών (μία polyline)")
+  (princ "\n  DGMPALL   Πίνακες για όλες τις polylines αυτόματα (layer + ΚΑΕΚ)")
   (princ "\n  DGME      Πίνακας αρχικών/τελικών εμβαδών")
   (princ "\n  DGMT      Πίνακας για τη διόρθωση των γεωτεμαχίων")
   (princ "\n  DGMTXT    Εξαγωγή συντεταγμένων σε TXT")

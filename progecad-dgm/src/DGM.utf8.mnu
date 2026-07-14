@@ -17,7 +17,8 @@
 [--]
 [6. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
 [7. Αρίθμηση κορυφών - μαζική, με κοινές κορυφές (DGMK)]^C^C_DGMK
-[8. Πίνακας συντεταγμένων κορυφών (DGMP)]^C^C_DGMP
+[8. Πίνακες όλων των polylines αυτόματα (DGMPALL)]^C^C_DGMPALL
+[Πίνακας συντεταγμένων μίας polyline (DGMP)]^C^C_DGMP
 [Εξαγωγή συντεταγμένων σε TXT (DGMTXT)]^C^C_DGMTXT
 [--]
 [9. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
@@ -53,7 +54,8 @@
 [7. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
 [8. Αρίθμηση κορυφών - μαζική, με κοινές κορυφές (DGMK)]^C^C_DGMK
 [->9. Πίνακες]
-  [Πίνακας συντεταγμένων κορυφών (DGMP)]^C^C_DGMP
+  [Πίνακες όλων των polylines αυτόματα (DGMPALL)]^C^C_DGMPALL
+  [Πίνακας συντεταγμένων μίας polyline (DGMP)]^C^C_DGMP
   [Πίνακας αρχικών και τελικών εμβαδών (DGME)]^C^C_DGME
   [Πίνακας για τη διόρθωση των γεωτεμαχίων (DGMT)]^C^C_DGMT
   [<-Εξαγωγή συντεταγμένων σε TXT (DGMTXT)]^C^C_DGMTXT
