@@ -2170,6 +2170,238 @@
           (princ (strcat "\nΔημιουργήθηκαν " (itoa cnt) " πίνακες."))))))
   (princ))
 
+;;; ========== ΠΛΗΡΩΣ ΑΥΤΟΜΑΤΗ ΑΡΙΘΜΗΣΗ + ΟΛΟΙ ΟΙ ΠΙΝΑΚΕΣ ==============
+
+;; Κείμενα ενός layer ως λίστα ((x y) . string)
+(defun dgm:laytexts (lay / ss i d out)
+  (setq out nil
+        ss (ssget "_X" (list '(0 . "TEXT,MTEXT") (cons 8 lay))))
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq d (entget (ssname ss i)))
+        (setq out (cons (cons (list (cadr (assoc 10 d)) (caddr (assoc 10 d)))
+                              (cdr (assoc 1 d)))
+                        out))
+        (setq i (1+ i)))))
+  out)
+
+;; Αυτόματη αρίθμηση κορυφών σε λίστα polylines (κανόνας DGMK: κοινές
+;; κορυφές = ένας αριθμός, υπάρχοντα σημάδια διατηρούνται).
+(defun dgm:autonumber (ents tol h / n done e lay mlay a pt f dd cnt)
+  (setq n (dgm:getint "\nΑριθμός πρώτης κορυφής" (1+ dgm:*num*)))
+  (dgm:marks-load)
+  (setq done nil cnt 0)
+  (foreach e ents
+    (setq lay  (cdr (assoc 8 (entget e)))
+          mlay (strcat "σημείο_" lay)
+          a    (assoc mlay dgm:*layers*))
+    (dgm:layer mlay (if a (cadr a) 3))
+    (foreach pt (dgm:lwpts e)
+      (setq f nil)
+      (foreach dd done
+        (if (< (distance dd pt) tol) (setq f T)))
+      (cond
+        (f nil)
+        ((dgm:findnum pt (* 2.5 h))
+         (setq done (cons pt done)))
+        (t
+         (dgm:point pt mlay)
+         (dgm:circle pt (* 0.35 h) mlay)
+         (dgm:text (list (+ (car pt) (* 0.6 h)) (+ (cadr pt) (* 0.6 h)))
+                   h (itoa n) mlay)
+         (setq done (cons pt done))
+         (setq n (1+ n) cnt (1+ cnt))))))
+  (if (> cnt 0) (setq dgm:*num* (1- n)))
+  cnt)
+
+;; Πίνακας συντεταγμένων μίας polyline στη θέση (x y).
+;; Επιστρέφει το συνολικό ύψος που κατέλαβε ο πίνακας.
+(defun dgm:coordtable (e title h maxr x y / pts nums miss n rows row len ng
+                         rowsper mrows heads wids g idx i p)
+  (setq pts (dgm:lwpts e))
+  (setq nums nil miss 0)
+  (foreach p pts
+    (setq n (dgm:findnum p (* 2.5 h)))
+    (if (null n) (setq n "-" miss (1+ miss)))
+    (setq nums (cons n nums)))
+  (setq nums (reverse nums))
+  (if (> miss 0)
+    (princ (strcat "\n[ΠΡΟΣΟΧΗ] " (itoa miss)
+                   " κορυφές χωρίς αρίθμηση στον πίνακα: " title)))
+  (setq rows nil i 0)
+  (while (< i (length pts))
+    (setq p (nth i pts))
+    (setq rows
+          (cons (list (nth i nums)
+                      (rtos (car p) 2 3)
+                      (rtos (cadr p) 2 3)
+                      (if (> i 0)
+                        (strcat (nth (1- i) nums) " - " (nth i nums) ": "
+                                (rtos (distance (nth (1- i) pts) p) 2 2))
+                        ""))
+                rows))
+    (setq i (1+ i)))
+  (setq rows (reverse rows))
+  (if (dgm:closedp e)
+    (setq rows
+          (append rows
+                  (list (list "" "" ""
+                              (strcat (last nums) " - " (car nums) ": "
+                                      (rtos (distance (last pts) (car pts)) 2 2)))))))
+  (setq len (length rows)
+        ng (1+ (/ (1- len) maxr))
+        rowsper (1+ (/ (1- len) ng)))
+  (setq mrows nil i 0)
+  (while (< i rowsper)
+    (setq row nil g 0)
+    (while (< g ng)
+      (setq idx (+ i (* g rowsper)))
+      (setq row (append row
+                        (if (< idx len) (nth idx rows) (list "" "" "" ""))))
+      (setq g (1+ g)))
+    (setq mrows (cons row mrows))
+    (setq i (1+ i)))
+  (setq mrows (reverse mrows))
+  (setq heads nil wids nil g 0)
+  (while (< g ng)
+    (setq heads (append heads
+                        (list (list "Σημείο") (list "Χ") (list "Y")
+                              (list "Αποστάσεις"))))
+    (setq wids (append wids (list (* 8 h) (* 16 h) (* 16 h) (* 17 h))))
+    (setq g (1+ g)))
+  (dgm:table (list x y) title heads wids mrows h "pinakas_sintetagmenon"
+             (if (and (dgm:closedp e) (> (length pts) 2))
+               (strcat "Ε (" (car nums) ",...," (last nums) ", " (car nums)
+                       "): " (rtos (dgm:area pts) 2 2) " τ.μ.")
+               nil))
+  (+ (* 2.4 h) (* 2.7 h) (* 2.0 h (length mrows))
+     (if (dgm:closedp e) (* 2.0 h) 0.0)))
+
+;;; DGMAUTO - Αυτόματη αρίθμηση + όλοι οι πίνακες για όλα τα πολύγωνα
+;;; των layers PST_KAEK (αρχικά ΚΑΕΚ) και DGM_PROP_FINAL (τελικά ΚΑΕΚ):
+;;; πίνακες συντεταγμένων, πίνακας αρχικών-τελικών εμβαδών, και πίνακας
+;;; για τη διόρθωση των γεωτεμαχίων (από τα AREA_A/AREA_D αν υπάρχουν).
+(defun c:DGMAUTO ( / h tol maxr ins x y pstl dgml ents ktexts it pts kaek
+                     title ht rows a1 a2 fmt tx heads wids labs pair lp nm
+                     ip apo se cnt pp dp)
+  (setq pstl (dgm:collect '("PST_KAEK") T)
+        dgml (dgm:collect '("DGM_PROP_FINAL") T))
+  (if (null pstl)
+    (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα στο layer PST_KAEK. **")
+    (progn
+      (setq h (dgm:getreal "\nΎψος κειμένου" dgm:*h*))
+      (setq dgm:*h* h)
+      (setq tol (dgm:getreal "\nΑνοχή ταύτισης κορυφών (m)" 0.001))
+      (setq maxr (dgm:getint "\nΜέγιστες γραμμές ανά ομάδα στηλών" 30))
+      (setq ins (getpoint "\nΣημείο εισαγωγής πινάκων (πάνω αριστερή γωνία): "))
+      (if ins
+        (progn
+          (setq x (car ins) y (cadr ins))
+          ;; 1. Αυτόματη αρίθμηση κορυφών (πρώτα αρχικά, μετά τελικά)
+          (setq ents (append (mapcar 'car pstl) (mapcar 'car dgml)))
+          (setq cnt (dgm:autonumber ents tol h))
+          (princ (strcat "\nΑριθμήθηκαν " (itoa cnt) " νέες κορυφές σε "
+                         (itoa (length ents)) " πολύγωνα."))
+          ;; 2. Πίνακες συντεταγμένων
+          (dgm:marks-load)
+          (setq ktexts (dgm:kaektexts))
+          (dgm:layer-std "pinakas_sintetagmenon")
+          (foreach it pstl
+            (setq pts (cadr it)
+                  kaek (dgm:kaekof pts ktexts))
+            (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ ΑΡΧΙΚΟΥ ΓΕΩΤΕΜΑΧΙΟΥ ΜΕ ΚΑΕΚ "
+                                (if kaek kaek "ΑΓΝΩΣΤΟ")))
+            (setq ht (dgm:coordtable (car it) title h maxr x y))
+            (setq y (- y ht (* 4.0 h))))
+          (foreach it dgml
+            (setq pts (cadr it)
+                  kaek (dgm:kaekof pts ktexts))
+            (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ ΤΕΛΙΚΟΥ ΓΕΩΤΕΜΑΧΙΟΥ ΜΕ ΚΑΕΚ "
+                                (if kaek kaek "ΑΓΝΩΣΤΟ")
+                                " ΓΙΑ ΤΗΝ ΕΝΗΜΕΡΩΣΗ ΤΗΣ ΚΤΗΜΑΤΟΛΟΓΙΚΗΣ ΒΑΣΗΣ"))
+            (setq ht (dgm:coordtable (car it) title h maxr x y))
+            (setq y (- y ht (* 4.0 h))))
+          ;; 3. Πίνακας αρχικών και τελικών εμβαδών (ανά κείμενο ΚΑΕΚ/ΝΕΟ)
+          (setq rows nil)
+          (foreach tx ktexts
+            (setq fmt (dgm:kaekfmt (cdr tx)))
+            (cond
+              ((eq 'KAEK fmt)
+               (setq a1 nil a2 nil)
+               (foreach pp pstl
+                 (if (dgm:inpoly (car tx) (cadr pp))
+                   (setq a1 (+ (if a1 a1 0.0) (dgm:area (cadr pp))))))
+               (foreach dp dgml
+                 (if (dgm:inpoly (car tx) (cadr dp))
+                   (setq a2 (+ (if a2 a2 0.0) (dgm:area (cadr dp))))))
+               (setq rows (cons (list (cdr tx)
+                                      (if a1 (rtos a1 2 2) "-")
+                                      (if a2 (rtos a2 2 2) "-"))
+                                rows)))
+              ((eq 'NEO fmt)
+               (setq a2 nil)
+               (foreach dp dgml
+                 (if (dgm:inpoly (car tx) (cadr dp))
+                   (setq a2 (+ (if a2 a2 0.0) (dgm:area (cadr dp))))))
+               (setq rows (cons (list (cdr tx) "-"
+                                      (if a2 (rtos a2 2 2) "-"))
+                                rows)))))
+          (setq rows (reverse rows))
+          (if rows
+            (progn
+              (setq heads (list (list "ΕΜΠΛΕΚΟΜΕΝΑ ΚΑΕΚ")
+                                (list "ΑΡΧΙΚΟ ΕΜΒΑΔΟΝ" "(τ.μ.)")
+                                (list "ΤΕΛΙΚΟ ΕΜΒΑΔΟΝ ΜΕΤΑ ΤΗ"
+                                      "ΔΙΟΡΘΩΣΗ ΤΩΝ ΟΡΙΩΝ ΒΑΣΕΙ"
+                                      "ΑΙΤΗΣΗΣ / ΔΙΚΟΓΡΑΦΟΥ (τ.μ.)"))
+                    wids (list (* 22 h) (* 16 h) (* 26 h)))
+              (dgm:table (list x y)
+                         "ΠΙΝΑΚΑΣ ΑΡΧΙΚΩΝ ΚΑΙ ΤΕΛΙΚΩΝ ΕΜΒΑΔΩΝ ΕΠΗΡΕΑΖΟΜΕΝΩΝ ΓΕΩΤΕΜΑΧΙΩΝ"
+                         heads wids rows h "pinakas_sintetagmenon" nil)
+              (setq y (- y (* 2.4 h) (* 5.7 h) (* 2.0 h (length rows))
+                         (* 4.0 h)))))
+          ;; 4. Πίνακας για τη διόρθωση των γεωτεμαχίων (από AREA_A/AREA_D)
+          (setq rows nil)
+          (foreach pair '(("AREA_A" . "AREA_A-labels")
+                          ("AREA_D" . "AREA_D-labels"))
+            (setq labs (dgm:laytexts (cdr pair)))
+            (foreach lp (dgm:collect (list (car pair)) T)
+              (setq pts (cadr lp)
+                    ip (dgm:innerpt pts)
+                    nm nil apo nil se nil)
+              (foreach tx labs
+                (if (and (null nm) (dgm:inpoly (car tx) pts))
+                  (setq nm (cdr tx))))
+              (foreach pp pstl
+                (if (and (null apo) ip (dgm:inpoly ip (cadr pp)))
+                  (setq apo (dgm:kaekof (cadr pp) ktexts))))
+              (foreach dp dgml
+                (if (and (null se) ip (dgm:inpoly ip (cadr dp)))
+                  (setq se (dgm:kaekof (cadr dp) ktexts))))
+              (setq rows (cons (list (if nm nm "-")
+                                     (rtos (dgm:area pts) 2 2)
+                                     (if apo apo "-")
+                                     (if se se "-"))
+                               rows))))
+          (setq rows (reverse rows))
+          (if rows
+            (progn
+              (setq heads (list (list "ΤΜΗΜΑ")
+                                (list "ΕΜΒΑΔΟΝ" "(τ.μ.)")
+                                (list "ΑΠΟ ΚΑΕΚ")
+                                (list "ΣΕ ΚΑΕΚ"))
+                    wids (list (* 10 h) (* 14 h) (* 18 h) (* 18 h)))
+              (dgm:table (list x y)
+                         "ΠΙΝΑΚΑΣ ΓΙΑ ΤΗ ΔΙΟΡΘΩΣΗ ΤΩΝ ΓΕΩΤΕΜΑΧΙΩΝ"
+                         heads wids rows h "pinakas_sintetagmenon" nil))
+            (princ "\n[INFO] Δεν υπάρχουν πολύγωνα AREA_A/AREA_D - ο πίνακας διόρθωσης παραλείφθηκε."))
+          (princ (strcat "\nΟλοκληρώθηκε: πίνακες για "
+                         (itoa (length pstl)) " αρχικά και "
+                         (itoa (length dgml)) " τελικά γεωτεμάχια."))))))
+  (princ))
+
 ;;; ================= ΚΛΙΜΑΚΑ - ΚΑΝΑΒΟΣ - ΒΟΡΡΑΣ =========================
 
 ;; Ερώτηση κλίμακας σχεδίασης - επιστρέφει και αποθηκεύει τον παρονομαστή
@@ -2300,6 +2532,7 @@
   (princ "\n  DGMORIGIN Αλλαγή αρχής/φοράς κλειστής polyline")
   (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών (μία polyline)")
   (princ "\n  DGMPALL   Πίνακες για όλες τις polylines αυτόματα (layer + ΚΑΕΚ)")
+  (princ "\n  DGMAUTO   Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (PST_KAEK + DGM_PROP_FINAL)")
   (princ "\n  DGME      Πίνακας αρχικών/τελικών εμβαδών")
   (princ "\n  DGMT      Πίνακας για τη διόρθωση των γεωτεμαχίων")
   (princ "\n  DGMTXT    Εξαγωγή συντεταγμένων σε TXT")
