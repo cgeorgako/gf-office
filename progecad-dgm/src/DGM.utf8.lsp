@@ -345,29 +345,59 @@
                  (itoa (length lst)) " τυποποιημένα για τον τύπο αυτόν)."))
   (princ))
 
-;;; DGMK - Αρίθμηση κορυφών polyline
-(defun c:DGMK ( / en lay mlay a pts h n pt)
-  (setq en (dgm:sel-poly "\nΕπιλέξτε polyline για αρίθμηση κορυφών: "))
-  (if en
+;;; DGMK - Μαζική αρίθμηση κορυφών σε μία ή περισσότερες polylines.
+;;; Κορυφές που ταυτίζονται (εντός ανοχής) παίρνουν ΕΝΑΝ αριθμό, και
+;;; κορυφές με υπάρχον σημάδι από παλαιότερη αρίθμηση δεν ξανααριθμούνται.
+(defun c:DGMK ( / ss tol h n i e lay mlay a pts pt done f dd
+                  cnt skipdup skipex)
+  (princ "\nΕπιλέξτε polylines για αρίθμηση κορυφών: ")
+  (setq ss (ssget '((0 . "LWPOLYLINE"))))
+  (if ss
     (progn
-      (setq lay  (cdr (assoc 8 (entget en)))
-            mlay (strcat "σημείο_" lay)
-            a    (assoc mlay dgm:*layers*))
-      (dgm:layer mlay (if a (cadr a) 3))
       (setq h (dgm:getreal "\nΎψος κειμένου αρίθμησης" dgm:*h*))
       (setq dgm:*h* h)
+      (setq tol (dgm:getreal "\nΑνοχή ταύτισης κορυφών (m)" 0.001))
       (setq n (dgm:getint "\nΑριθμός πρώτης κορυφής" (1+ dgm:*num*)))
-      (setq pts (dgm:lwpts en))
-      (foreach pt pts
-        (dgm:point pt mlay)
-        (dgm:circle pt (* 0.35 h) mlay)
-        (dgm:text (list (+ (car pt) (* 0.6 h)) (+ (cadr pt) (* 0.6 h)))
-                  h (itoa n) mlay)
-        (setq n (1+ n)))
-      (setq dgm:*num* (1- n))
-      (princ (strcat "\nΑριθμήθηκαν " (itoa (length pts))
-                     " κορυφές στο layer " mlay
-                     ". Τελευταίος αριθμός: " (itoa dgm:*num*)))))
+      (dgm:marks-load)
+      (setq done nil cnt 0 skipdup 0 skipex 0)
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq e (ssname ss i))
+        (setq lay  (cdr (assoc 8 (entget e)))
+              mlay (strcat "σημείο_" lay)
+              a    (assoc mlay dgm:*layers*))
+        (dgm:layer mlay (if a (cadr a) 3))
+        (setq pts (dgm:lwpts e))
+        (foreach pt pts
+          (setq f nil)
+          (foreach dd done
+            (if (< (distance dd pt) tol) (setq f T)))
+          (cond
+            ;; κοινή κορυφή - αριθμήθηκε ήδη σε αυτή την εκτέλεση
+            (f (setq skipdup (1+ skipdup)))
+            ;; έχει ήδη σημάδι αρίθμησης από παλαιότερη εκτέλεση
+            ((dgm:findnum pt (* 2.5 h))
+             (setq done (cons pt done))
+             (setq skipex (1+ skipex)))
+            ;; νέα κορυφή
+            (t
+             (dgm:point pt mlay)
+             (dgm:circle pt (* 0.35 h) mlay)
+             (dgm:text (list (+ (car pt) (* 0.6 h)) (+ (cadr pt) (* 0.6 h)))
+                       h (itoa n) mlay)
+             (setq done (cons pt done))
+             (setq n (1+ n) cnt (1+ cnt)))))
+        (setq i (1+ i)))
+      (if (> cnt 0) (setq dgm:*num* (1- n)))
+      (princ (strcat "\nΑριθμήθηκαν " (itoa cnt) " νέες κορυφές σε "
+                     (itoa (sslength ss)) " polylines. Τελευταίος αριθμός: "
+                     (itoa dgm:*num*)))
+      (if (> skipdup 0)
+        (princ (strcat "\nΚοινές κορυφές που πήραν έναν αριθμό: "
+                       (itoa skipdup))))
+      (if (> skipex 0)
+        (princ (strcat "\nΚορυφές με υπάρχουσα αρίθμηση που διατηρήθηκαν: "
+                       (itoa skipex))))))
   (princ))
 
 ;;; DGMP - Πίνακας συντεταγμένων κορυφών
@@ -2112,7 +2142,7 @@
   (princ "\n  DGMA      Χειροκίνητος χαρακτηρισμός τμήματος Α/Δ")
   (princ "\n  DGMCOPY   Αντιγραφή TOPO_PROP σε άλλα layers")
   (princ "\nΑρίθμηση - Πίνακες:")
-  (princ "\n  DGMK      Αρίθμηση κορυφών polyline")
+  (princ "\n  DGMK      Μαζική αρίθμηση κορυφών (κοινές κορυφές = ένας αριθμός)")
   (princ "\n  DGMORIGIN Αλλαγή αρχής/φοράς κλειστής polyline")
   (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών")
   (princ "\n  DGME      Πίνακας αρχικών/τελικών εμβαδών")
