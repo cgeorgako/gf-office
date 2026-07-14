@@ -9,18 +9,21 @@
 **DGMTOPO
 [Τοπογραφικά]
 [1. Δημιουργία Layers (DGML)]^C^C_DGML
-[2. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
-[3. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
+[2. Κλίμακα σχεδίασης 1:100 - 1:2000 (DGMSCALE)]^C^C_DGMSCALE
+[3. Κάναβος σχεδίασης + σύμβολο βορρά (DGMGRID)]^C^C_DGMGRID
 [--]
-[4. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
-[5. Αρίθμηση κορυφών polyline (DGMK)]^C^C_DGMK
-[6. Πίνακας συντεταγμένων κορυφών (DGMP)]^C^C_DGMP
+[4. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
+[5. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
+[--]
+[6. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
+[7. Αρίθμηση κορυφών polyline (DGMK)]^C^C_DGMK
+[8. Πίνακας συντεταγμένων κορυφών (DGMP)]^C^C_DGMP
 [Εξαγωγή συντεταγμένων σε TXT (DGMTXT)]^C^C_DGMTXT
 [--]
-[7. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
-[8. Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
-[9. Υπογραφή PDF με JSignPdf (DGMSIGN)]^C^C_DGMSIGN
-[10. ZIP αρχείων προς παράδοση (DGMZIP)]^C^C_DGMZIP
+[9. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
+[10. Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
+[11. Υπογραφή PDF με JSignPdf (DGMSIGN)]^C^C_DGMSIGN
+[12. ZIP αρχείων προς παράδοση (DGMZIP)]^C^C_DGMZIP
 [--]
 [Τοποθέτηση ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
 [Λίστα εντολών (DGMHELP)]^C^C_DGMHELP

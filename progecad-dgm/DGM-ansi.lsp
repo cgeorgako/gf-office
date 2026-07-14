@@ -1986,11 +1986,117 @@
           (princ "\n’νοιξε το JSignPdf. Υπογράψτε το PDF και μετά εκτελέστε DGMZIP.")))))
   (princ))
 
+;;; ================= ΚΛΙΜΑΚΑ - ΚΑΝΑΒΟΣ - ΒΟΡΡΑΣ =========================
+
+;; Ερώτηση κλίμακας σχεδίασης - επιστρέφει και αποθηκεύει τον παρονομαστή
+(defun dgm:askscale ( / k def)
+  (setq def (cond ((null dgm:*scale*) 3)
+                  ((= dgm:*scale* 100) 1)
+                  ((= dgm:*scale* 200) 2)
+                  ((= dgm:*scale* 1000) 4)
+                  ((= dgm:*scale* 2000) 5)
+                  (t 3)))
+  (princ "\nΚλίμακα σχεδίασης:")
+  (princ "\n  1 = 1:100   2 = 1:200   3 = 1:500   4 = 1:1000   5 = 1:2000")
+  (setq k (dgm:getint "\nΕπιλογή" def))
+  (setq dgm:*scale*
+        (cond ((= k 1) 100) ((= k 2) 200) ((= k 4) 1000)
+              ((= k 5) 2000) (t 500)))
+  ;; προτεινόμενο ύψος κειμένων = 2 mm στην εκτύπωση
+  (setq dgm:*h* (* 0.002 dgm:*scale*))
+  dgm:*scale*)
+
+;;; DGMSCALE - Ορισμός κλίμακας σχεδίασης
+(defun c:DGMSCALE ( / m)
+  (setq m (dgm:askscale))
+  (setvar "LTSCALE" (/ m 100.0))
+  (princ (strcat "\nΟρίστηκε κλίμακα σχεδίασης 1:" (itoa m)
+                 ". Προτεινόμενο ύψος κειμένων: "
+                 (rtos dgm:*h* 2 2) " m (2 mm εκτύπωσης), LTSCALE = "
+                 (rtos (/ m 100.0) 2 2) "."))
+  (princ))
+
+;; Σύμβολο βορρά στο σημείο pt (κατακόρυφο, προς τα πάνω), μέγεθος ανά κλίμακα
+(defun dgm:north (pt m / x y r)
+  (setq x (car pt) y (cadr pt)
+        r (* 0.01 m))                       ; ακτίνα κύκλου = 10 mm εκτύπωσης
+  (dgm:layer "KANABOS" 8)
+  ;; κύκλος
+  (dgm:circle (list x y) r "KANABOS")
+  ;; βελόνα (κλειστό περίγραμμα): κορυφή - δεξιά βάση - κέντρο - αριστερή βάση
+  (dgm:mkpoly (list (list x (+ y (* 1.30 r)))
+                    (list (+ x (* 0.30 r)) (- y (* 0.80 r)))
+                    (list x (- y (* 0.40 r)))
+                    (list (- x (* 0.30 r)) (- y (* 0.80 r))))
+              "KANABOS" T)
+  ;; γεμισμένο αριστερό μισό της βελόνας
+  (entmake (list '(0 . "SOLID") '(8 . "KANABOS")
+                 (cons 10 (list x (+ y (* 1.30 r)) 0.0))
+                 (cons 11 (list (- x (* 0.30 r)) (- y (* 0.80 r)) 0.0))
+                 (cons 12 (list x (- y (* 0.40 r)) 0.0))
+                 (cons 13 (list x (- y (* 0.40 r)) 0.0))))
+  ;; γράμμα Β πάνω από την κορυφή
+  (dgm:textc (list x (+ y (* 1.75 r))) (* 0.65 r) "Β" "KANABOS")
+  (princ))
+
+;;; DGMGRID - Κάναβος σχεδίασης + σύμβολο βορρά
+(defun c:DGMGRID ( / m step p1 p2 xmin ymin xmax ymax x0 y0 x y arm h lbl
+                    dec pt)
+  ;; α) κλίμακα, αν δεν έχει οριστεί
+  (if (null dgm:*scale*)
+    (progn
+      (princ "\nΔεν έχει οριστεί κλίμακα σχεδίασης.")
+      (dgm:askscale)))
+  (setq m dgm:*scale*)
+  ;; β) βήμα κανάβου
+  (setq step (dgm:getreal "\nΒήμα κανάβου (m)" (/ m 10.0)))
+  (if (<= step 0.0) (setq step (/ m 10.0)))
+  (setq p1 (getpoint "\nΠρώτη γωνία περιοχής κανάβου: "))
+  (setq p2 (if p1 (getcorner p1 "\nΑπέναντι γωνία: ")))
+  (if (and p1 p2)
+    (progn
+      (setq xmin (min (car p1) (car p2))  xmax (max (car p1) (car p2))
+            ymin (min (cadr p1) (cadr p2)) ymax (max (cadr p1) (cadr p2)))
+      ;; ευθυγράμμιση σε ακέραια πολλαπλάσια του βήματος (ΕΓΣΑ '87)
+      (setq x0 (* step (fix (/ xmin step))))
+      (while (< x0 xmin) (setq x0 (+ x0 step)))
+      (setq y0 (* step (fix (/ ymin step))))
+      (while (< y0 ymin) (setq y0 (+ y0 step)))
+      (dgm:layer "KANABOS" 8)
+      (setq arm (* 0.0025 m)               ; μισό σκέλος σταυρού = 2.5 mm
+            h   (* 0.002 m)                ; ύψος κειμένων = 2 mm
+            dec (if (equal step (float (fix step)) 1e-9) 0 2))
+      (setq lbl (dgm:getint "\nΑναγραφή συντεταγμένων περιμετρικά; 1 = Ναι, 0 = Όχι" 1))
+      (setq x x0)
+      (while (<= x (+ xmax 1e-9))
+        (setq y y0)
+        (while (<= y (+ ymax 1e-9))
+          ;; σταυρός κανάβου
+          (dgm:line (list (- x arm) y) (list (+ x arm) y) "KANABOS")
+          (dgm:line (list x (- y arm)) (list x (+ y arm)) "KANABOS")
+          (if (= lbl 1)
+            (progn
+              ;; τιμές Χ κάτω από την πρώτη σειρά, τιμές Υ αριστερά της πρώτης στήλης
+              (if (equal y y0 1e-9)
+                (dgm:textc (list x (- y0 (* 2.2 h))) h (rtos x 2 dec) "KANABOS"))
+              (if (equal x x0 1e-9)
+                (dgm:textc (list (- x0 (* 4.5 h)) y) h (rtos y 2 dec) "KANABOS"))))
+          (setq y (+ y step)))
+        (setq x (+ x step)))
+      (princ (strcat "\nΣχεδιάστηκε κάναβος με βήμα " (rtos step 2 dec)
+                     " m (κλίμακα 1:" (itoa m) ") στο layer KANABOS."))
+      ;; σύμβολο βορρά
+      (setq pt (getpoint "\nΘέση συμβόλου βορρά (Enter για παράλειψη): "))
+      (if pt (dgm:north pt m))))
+  (princ))
+
 ;;; DGMHELP - Βοήθεια
 (defun c:DGMHELP ()
   (princ "\n----------------- Εντολές GF-DGM -----------------")
   (princ "\nΠροετοιμασία:")
   (princ "\n  DGML      Δημιουργία layers ανά τύπο διαγράμματος")
+  (princ "\n  DGMSCALE  Κλίμακα σχεδίασης (1:100 ως 1:2000)")
+  (princ "\n  DGMGRID   Κάναβος σχεδίασης + σύμβολο βορρά")
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
   (princ "\nΠολύγωνα:")
