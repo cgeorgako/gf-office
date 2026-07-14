@@ -2283,13 +2283,14 @@
 ;;; των layers PST_KAEK (αρχικά ΚΑΕΚ) και DGM_PROP_FINAL (τελικά ΚΑΕΚ):
 ;;; πίνακες συντεταγμένων, πίνακας αρχικών-τελικών εμβαδών, και πίνακας
 ;;; για τη διόρθωση των γεωτεμαχίων (από τα AREA_A/AREA_D αν υπάρχουν).
-(defun c:DGMAUTO ( / h tol maxr ins x y pstl dgml ents ktexts it pts kaek
-                     title ht rows a1 a2 fmt tx heads wids labs pair lp nm
-                     ip apo se cnt pp dp)
-  (setq pstl (dgm:collect '("PST_KAEK") T)
-        dgml (dgm:collect '("DGM_PROP_FINAL") T))
-  (if (null pstl)
-    (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα στο layer PST_KAEK. **")
+(defun c:DGMAUTO ( / h tol maxr ins x y topol pstl dgml ents ktexts it pts
+                     kaek title ht rows a1 a2 fmt tx heads wids labs pair lp
+                     nm ip apo se cnt pp dp k)
+  (setq topol (dgm:collect '("TOPO_PROP") T)
+        pstl  (dgm:collect '("PST_KAEK") T)
+        dgml  (dgm:collect '("DGM_PROP_FINAL") T))
+  (if (and (null pstl) (null topol))
+    (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα στα layers PST_KAEK / TOPO_PROP. **")
     (progn
       (setq h (dgm:getreal "\nΎψος κειμένου" dgm:*h*))
       (setq dgm:*h* h)
@@ -2299,8 +2300,10 @@
       (if ins
         (progn
           (setq x (car ins) y (cadr ins))
-          ;; 1. Αυτόματη αρίθμηση κορυφών (πρώτα αρχικά, μετά τελικά)
-          (setq ents (append (mapcar 'car pstl) (mapcar 'car dgml)))
+          ;; 1. Αυτόματη αρίθμηση κορυφών (ιδιοκτησία, μετά αρχικά, μετά τελικά)
+          (setq ents (append (mapcar 'car topol)
+                             (mapcar 'car pstl)
+                             (mapcar 'car dgml)))
           (setq cnt (dgm:autonumber ents tol h))
           (princ (strcat "\nΑριθμήθηκαν " (itoa cnt) " νέες κορυφές σε "
                          (itoa (length ents)) " πολύγωνα."))
@@ -2308,6 +2311,14 @@
           (dgm:marks-load)
           (setq ktexts (dgm:kaektexts))
           (dgm:layer-std "pinakas_sintetagmenon")
+          ;; 2α. Πίνακες ιδιοκτησίας (TOPO_PROP)
+          (setq k 1)
+          (foreach it topol
+            (setq title (strcat "ΓΕΩΤΕΜΑΧΙΟ \"" (itoa k) "\" - (TOPO_PROP)"))
+            (setq ht (dgm:coordtable (car it) title h maxr x y))
+            (setq y (- y ht (* 4.0 h)))
+            (setq k (1+ k)))
+          ;; 2β. Πίνακες αρχικών γεωτεμαχίων (PST_KAEK)
           (foreach it pstl
             (setq pts (cadr it)
                   kaek (dgm:kaekof pts ktexts))
@@ -2398,6 +2409,7 @@
                          heads wids rows h "pinakas_sintetagmenon" nil))
             (princ "\n[INFO] Δεν υπάρχουν πολύγωνα AREA_A/AREA_D - ο πίνακας διόρθωσης παραλείφθηκε."))
           (princ (strcat "\nΟλοκληρώθηκε: πίνακες για "
+                         (itoa (length topol)) " ιδιοκτησίες (TOPO_PROP), "
                          (itoa (length pstl)) " αρχικά και "
                          (itoa (length dgml)) " τελικά γεωτεμάχια."))))))
   (princ))
@@ -2532,7 +2544,8 @@
   (princ "\n  DGMORIGIN Αλλαγή αρχής/φοράς κλειστής polyline")
   (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών (μία polyline)")
   (princ "\n  DGMPALL   Πίνακες για όλες τις polylines αυτόματα (layer + ΚΑΕΚ)")
-  (princ "\n  DGMAUTO   Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (PST_KAEK + DGM_PROP_FINAL)")
+  (princ "\n  DGMAUTO   Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (TOPO_PROP + PST_KAEK + DGM_PROP_FINAL)")
+  (princ "\nΣημείωση: κάθε εντολή αναιρείται συνολικά με ένα U/UNDO.")
   (princ "\n  DGME      Πίνακας αρχικών/τελικών εμβαδών")
   (princ "\n  DGMT      Πίνακας για τη διόρθωση των γεωτεμαχίων")
   (princ "\n  DGMTXT    Εξαγωγή συντεταγμένων σε TXT")
@@ -2544,6 +2557,40 @@
   (princ "\n  DGMZIP    ZIP παραδοτέων (DXF + υπογεγραμμένο PDF)")
   (princ "\n---------------------------------------------------")
   (princ))
+
+;;; ==================== ΟΜΑΔΟΠΟΙΗΣΗ UNDO ================================
+;;; Κάθε εντολή τυλίγεται σε UNDO Begin/End ώστε ένα U/UNDO να αναιρεί
+;;; συνολικά όλες τις αλλαγές της τελευταίας εντολής.
+
+(defun dgm:runwrapped (osym / *error*)
+  (defun *error* (msg)
+    (command "_.UNDO" "_E")
+    (if (and msg
+             (/= msg "Function cancelled")
+             (/= msg "quit / exit abort"))
+      (princ (strcat "\nΣφάλμα: " msg)))
+    (princ))
+  (command "_.UNDO" "_BE")
+  (apply (eval osym) nil)
+  (command "_.UNDO" "_E")
+  (princ))
+
+(defun dgm:wrapcmd (nm / csym osym)
+  (setq csym (read (strcat "C:" nm))
+        osym (read (strcat "DGM:ORIG-" nm)))
+  (if (and (eval csym) (null (eval osym)))
+    (progn
+      (set osym (eval csym))
+      (eval (list 'defun csym '()
+                  (list 'dgm:runwrapped (list 'quote osym)))))))
+
+(foreach dgm:tmp '("DGML" "DGMK" "DGMP" "DGMPALL" "DGMAUTO" "DGME" "DGMT"
+                   "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
+                   "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
+                   "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"
+                   "DGMPREP")
+  (dgm:wrapcmd dgm:tmp))
+(setq dgm:tmp nil)
 
 (princ "\nDGM.lsp: Φορτώθηκαν τα εργαλεία ΔΓΜ. Πληκτρολογήστε DGMHELP για λίστα εντολών.")
 (princ)

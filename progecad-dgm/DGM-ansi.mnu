@@ -17,7 +17,8 @@
 [--]
 [6. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
 [7. Αρίθμηση κορυφών - μαζική, με κοινές κορυφές (DGMK)]^C^C_DGMK
-[8. Πίνακες όλων των polylines αυτόματα (DGMPALL)]^C^C_DGMPALL
+[8. Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (DGMAUTO)]^C^C_DGMAUTO
+[Πίνακες επιλεγμένων polylines (DGMPALL)]^C^C_DGMPALL
 [Πίνακας συντεταγμένων μίας polyline (DGMP)]^C^C_DGMP
 [Εξαγωγή συντεταγμένων σε TXT (DGMTXT)]^C^C_DGMTXT
 [--]
@@ -54,7 +55,7 @@
 [7. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
 [8. Αρίθμηση κορυφών - μαζική, με κοινές κορυφές (DGMK)]^C^C_DGMK
 [->9. Πίνακες]
-  [Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα - αρχικά και τελικά ΚΑΕΚ (DGMAUTO)]^C^C_DGMAUTO
+  [Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα - ιδιοκτησία, αρχικά, τελικά (DGMAUTO)]^C^C_DGMAUTO
   [--]
   [Πίνακες όλων των polylines αυτόματα (DGMPALL)]^C^C_DGMPALL
   [Πίνακας συντεταγμένων μίας polyline (DGMP)]^C^C_DGMP
