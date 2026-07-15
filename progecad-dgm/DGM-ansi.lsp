@@ -61,6 +61,7 @@
 
 (if (null dgm:*h*)   (setq dgm:*h* 0.5))    ; προεπιλεγμένο ύψος κειμένου
 (if (null dgm:*num*) (setq dgm:*num* 0))    ; τρέχων μετρητής αρίθμησης κορυφών
+(setq dgm:*numoff* 0.6)  ; μετατόπιση κειμένου αρίθμησης από την κορυφή (x ύψους)
 
 ;;; ------------------------- Βοηθητικές: σχεδίαση -----------------------
 
@@ -205,21 +206,38 @@
 ;;; Διαβάζει τα κείμενα αρίθμησης από τα layers "σημείο_*" ώστε οι πίνακες
 ;;; να παίρνουν τους ίδιους αριθμούς με τα σημάδια του σχεδίου.
 
-(defun dgm:marks-load ( / ss i d ip)
+;; Τοποθέτηση κειμένου αρίθμησης, μετατοπισμένο κατά dgm:*numoff*·h από την
+;; κορυφή (η κορυφή ανακτάται ακριβώς στο dgm:marks-load αφαιρώντας τη
+;; μετατόπιση από το ύψος του κειμένου).
+(defun dgm:placenum (pt h str lay / off)
+  (setq off (* dgm:*numoff* h))
+  (dgm:text (list (+ (car pt) off) (+ (cadr pt) off)) h str lay))
+
+;; Ανακτά τα σημάδια αρίθμησης ως ((x y) . αριθμός) στην ΑΚΡΙΒΗ θέση της
+;; κορυφής: το κείμενο είναι μετατοπισμένο κατά dgm:*numoff*·(ύψος), οπότε
+;; η μετατόπιση αφαιρείται με βάση το group 40 (ύψος) κάθε κειμένου. Έτσι η
+;; αναζήτηση δεν μπερδεύει γειτονικές κορυφές που απέχουν λίγο μεταξύ τους.
+(defun dgm:marks-load ( / ss i d ip h)
   (setq dgm:*marks* nil)
   (setq ss (ssget "_X" '((0 . "TEXT") (8 . "σημείο_*"))))
   (if ss
     (progn
       (setq i 0)
       (while (< i (sslength ss))
-        (setq d (entget (ssname ss i))
-              ip (cdr (assoc 10 d)))
+        (setq d  (entget (ssname ss i))
+              ip (cdr (assoc 10 d))
+              h  (cond ((cdr (assoc 40 d))) (dgm:*h*)))
         (setq dgm:*marks*
-              (cons (list (car ip) (cadr ip) (cdr (assoc 1 d)))
+              (cons (list (- (car ip) (* dgm:*numoff* h))
+                          (- (cadr ip) (* dgm:*numoff* h))
+                          (cdr (assoc 1 d)))
                     dgm:*marks*))
         (setq i (1+ i)))))
   dgm:*marks*)
 
+;; Πλησιέστερο σημάδι στην κορυφή pt εντός ανοχής tol. Επειδή τα σημάδια
+;; ανακτώνται στην ακριβή κορυφή, το πλησιέστερο είναι πάντα το σωστό ακόμη
+;; και όταν δύο κορυφές απέχουν λιγότερο από την ανοχή.
 (defun dgm:findnum (pt tol / best bd dd m)
   (setq best nil bd tol)
   (foreach m dgm:*marks*
@@ -383,8 +401,7 @@
             (t
              (dgm:point pt mlay)
              (dgm:circle pt (* 0.35 h) mlay)
-             (dgm:text (list (+ (car pt) (* 0.6 h)) (+ (cadr pt) (* 0.6 h)))
-                       h (itoa n) mlay)
+             (dgm:placenum pt h (itoa n) mlay)
              (setq done (cons pt done))
              (setq n (1+ n) cnt (1+ cnt)))))
         (setq i (1+ i)))
@@ -2209,8 +2226,7 @@
         (t
          (dgm:point pt mlay)
          (dgm:circle pt (* 0.35 h) mlay)
-         (dgm:text (list (+ (car pt) (* 0.6 h)) (+ (cadr pt) (* 0.6 h)))
-                   h (itoa n) mlay)
+         (dgm:placenum pt h (itoa n) mlay)
          (setq done (cons pt done))
          (setq n (1+ n) cnt (1+ cnt))))))
   (if (> cnt 0) (setq dgm:*num* (1- n)))
