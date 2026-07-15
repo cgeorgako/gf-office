@@ -92,6 +92,14 @@
                  (cons 40 h) (cons 1 str) '(50 . 0.0)
                  '(72 . 1) '(73 . 2))))
 
+;; Κεντραρισμένο κείμενο με γωνία περιστροφής ang (σε rad)
+(defun dgm:textcr (pt h str lay ang)
+  (entmake (list '(0 . "TEXT") (cons 8 lay)
+                 (cons 10 (list (car pt) (cadr pt) 0.0))
+                 (cons 11 (list (car pt) (cadr pt) 0.0))
+                 (cons 40 h) (cons 1 str) (cons 50 ang)
+                 '(72 . 1) '(73 . 2))))
+
 (defun dgm:line (p1 p2 lay)
   (entmake (list '(0 . "LINE") (cons 8 lay)
                  (cons 10 (list (car p1) (cadr p1) 0.0))
@@ -2484,8 +2492,8 @@
   (princ))
 
 ;;; DGMGRID - Κάναβος σχεδίασης + σύμβολο βορρά
-(defun c:DGMGRID ( / m step p1 p2 xmin ymin xmax ymax x0 y0 x y arm h lbl
-                    dec pt)
+(defun c:DGMGRID ( / m step p1 p2 xmin ymin xmax ymax x0 y0 xlast ylast
+                    x y arm h lbl dec pt s)
   ;; α) κλίμακα, αν δεν έχει οριστεί
   (if (null dgm:*scale*)
     (progn
@@ -2506,11 +2514,18 @@
       (while (< x0 xmin) (setq x0 (+ x0 step)))
       (setq y0 (* step (fix (/ ymin step))))
       (while (< y0 ymin) (setq y0 (+ y0 step)))
+      ;; τελευταία γραμμή/στήλη εντός της περιοχής
+      (setq xlast (+ x0 (* step (fix (+ 1e-9 (/ (- xmax x0) step)))))
+            ylast (+ y0 (* step (fix (+ 1e-9 (/ (- ymax y0) step))))))
       (dgm:layer "KANABOS" 8)
       (setq arm (* 0.0025 m)               ; μισό σκέλος σταυρού = 2.5 mm
             h   (* 0.002 m)                ; ύψος κειμένων = 2 mm
             dec (if (equal step (float (fix step)) 1e-9) 0 2))
       (setq lbl (dgm:getint "\nΑναγραφή συντεταγμένων περιμετρικά; 1 = Ναι, 0 = Όχι" 1))
+      ;; πλαίσιο κανάβου ως κλειστή polyline
+      (dgm:mkpoly (list (list x0 y0) (list xlast y0)
+                        (list xlast ylast) (list x0 ylast))
+                  "KANABOS" T)
       (setq x x0)
       (while (<= x (+ xmax 1e-9))
         (setq y y0)
@@ -2520,15 +2535,19 @@
           (dgm:line (list x (- y arm)) (list x (+ y arm)) "KANABOS")
           (if (= lbl 1)
             (progn
-              ;; τιμές Χ κάτω από την πρώτη σειρά, τιμές Υ αριστερά της πρώτης στήλης
+              ;; τιμές Χ κάτω από την πρώτη σειρά, κατακόρυφα (rotation 90°)
               (if (equal y y0 1e-9)
-                (dgm:textc (list x (- y0 (* 2.2 h))) h (rtos x 2 dec) "KANABOS"))
+                (progn
+                  (setq s (rtos x 2 dec))
+                  (dgm:textcr (list x (- y0 (* h (+ 1.5 (* 0.45 (strlen s))))))
+                              h s "KANABOS" (* 0.5 pi))))
+              ;; τιμές Υ αριστερά της πρώτης στήλης (οριζόντια)
               (if (equal x x0 1e-9)
                 (dgm:textc (list (- x0 (* 4.5 h)) y) h (rtos y 2 dec) "KANABOS"))))
           (setq y (+ y step)))
         (setq x (+ x step)))
       (princ (strcat "\nΣχεδιάστηκε κάναβος με βήμα " (rtos step 2 dec)
-                     " m (κλίμακα 1:" (itoa m) ") στο layer KANABOS."))
+                     " m (κλίμακα 1:" (itoa m) ") + πλαίσιο, στο layer KANABOS."))
       ;; σύμβολο βορρά
       (setq pt (getpoint "\nΘέση συμβόλου βορρά (Enter για παράλειψη): "))
       (if pt (dgm:north pt m))))
