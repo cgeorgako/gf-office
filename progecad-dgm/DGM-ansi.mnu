@@ -50,6 +50,9 @@
   [DGM_PROP_FINAL - BOUND_IMPL - BOUND_UNIMPL από TOPO_PROP (DGMCOPY)]^C^C_DGMCOPY
   [<-Χειροκίνητος χαρακτηρισμός τμήματος Α-Δ (DGMA)]^C^C_DGMA
 [5. Δημιουργία AREA_A και AREA_D (DGMAREAS)]^C^C_DGMAREAS
+[->Σκαριφήματα ΚΑΕΚ]
+  [Σκαρίφημα Αρχικών ΚΑΕΚ - PST_KAEK, καφέ hatch (DGMSKETCH)]^C^C_DGMSKETCH
+  [<-Σκαρίφημα Τελικών ΚΑΕΚ - DGM_PROP_FINAL, μπλε hatch (DGMSKETCH)]^C^C_DGMSKETCH
 [6. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
 [--]
 [7. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN

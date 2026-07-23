@@ -798,11 +798,16 @@
                (setq j (1+ j))))
             ((or (= et "TEXT") (= et "MTEXT"))
              (setq texts (1+ texts))
-             (if (not (cadddr rule))
-               (progn
-                 (princ (strcat "\n[ΠΡΟΣΟΧΗ] Κείμενο στο layer " lay
-                                " - το layer δεν προβλέπει κείμενα."))
-                 (setq nwarn (1+ nwarn)))))
+             (cond
+               ((member lay '("DGM_PROP_FINAL" "TOPO_PROP"))
+                (princ (strcat "\n[ΣΦΑΛΜΑ] Δεν επιτρέπεται κείμενο στο layer "
+                               lay " (ΔΓΜ)."))
+                (dgm:circle (cdr (assoc 10 d)) 2.0 "DGM_CHECK")
+                (setq nerr (1+ nerr)))
+               ((not (cadddr rule))
+                (princ (strcat "\n[ΠΡΟΣΟΧΗ] Κείμενο στο layer " lay
+                               " - το layer δεν προβλέπει κείμενα."))
+                (setq nwarn (1+ nwarn)))))
             ((or (= et "LINE") (= et "ARC") (= et "SPLINE")
                  (= et "POLYLINE") (= et "ELLIPSE") (= et "CIRCLE"))
              (princ (strcat "\n[ΣΦΑΛΜΑ] Οντότητα " et " στο layer " lay
@@ -2553,6 +2558,96 @@
       (if pt (dgm:north pt m))))
   (princ))
 
+;;; ================ ΣΚΑΡΙΦΗΜΑΤΑ ΑΡΧΙΚΩΝ / ΤΕΛΙΚΩΝ ΚΑΕΚ ==================
+
+;; Χειροποίητη γραμμοσκίαση: παράλληλες διαγώνιες γραμμές (γωνία angdeg)
+;; με βήμα spacing, κομμένες στο περίγραμμα του κλειστού πολυγώνου pts.
+;; Ανεξάρτητη από HATCH entity - δουλεύει σε κάθε CAD.
+(defun dgm:hatchpoly (pts spacing angdeg lay
+                      / a dx dy nx ny offs omin omax n o hits i pa pb
+                        an bn den pr px py k)
+  (setq a  (* pi (/ angdeg 180.0))
+        dx (cos a) dy (sin a)
+        nx (- (sin a)) ny (cos a)
+        n  (length pts))
+  (setq offs (mapcar '(lambda (p) (+ (* (car p) nx) (* (cadr p) ny))) pts))
+  (setq omin (apply 'min offs) omax (apply 'max offs))
+  (setq o (+ omin (* 0.5 spacing)))
+  (while (< o omax)
+    (setq hits nil i 0)
+    (while (< i n)
+      (setq pa (nth i pts) pb (nth (rem (1+ i) n) pts))
+      (setq an  (+ (* (car pa) nx) (* (cadr pa) ny))
+            bn  (+ (* (car pb) nx) (* (cadr pb) ny))
+            den (- bn an))
+      (if (> (abs den) 1e-12)
+        (progn
+          (setq pr (/ (- o an) den))
+          (if (and (>= pr -1e-9) (<= pr (+ 1.0 1e-9)))
+            (progn
+              (setq px (+ (car pa) (* pr (- (car pb) (car pa))))
+                    py (+ (cadr pa) (* pr (- (cadr pb) (cadr pa)))))
+              (setq hits (cons (cons (+ (* px dx) (* py dy)) (list px py))
+                               hits))))))
+      (setq i (1+ i)))
+    (setq hits (dgm:sortpairs hits))
+    (setq k 0)
+    (while (< (1+ k) (length hits))
+      (dgm:line (cdr (nth k hits)) (cdr (nth (1+ k) hits)) lay)
+      (setq k (+ k 2)))
+    (setq o (+ o spacing)))
+  (princ))
+
+;;; DGMSKETCH - Σκαρίφημα Αρχικών (PST_KAEK, καφέ) ή Τελικών
+;;; (DGM_PROP_FINAL, μπλε) ΚΑΕΚ σε σημείο που επιλέγει ο χρήστης:
+;;; αντίγραφα των πολυγώνων + γραμμοσκίαση + ετικέτα ΚΑΕΚ.
+(defun c:DGMSKETCH ( / typ src lay hlay col ktexts items allx ally minx miny
+                       span inpt dx dy h spacing it cpts p ip kaek cnt)
+  (princ "\nΣκαρίφημα:  1 = Αρχικών ΚΑΕΚ (PST_KAEK, καφέ)   2 = Τελικών ΚΑΕΚ (DGM_PROP_FINAL, μπλε)")
+  (setq typ (dgm:getint "\nΕπιλογή" 1))
+  (if (= typ 2)
+    (setq src "DGM_PROP_FINAL" lay "SKARIF_TELIKA" col 5)
+    (setq src "PST_KAEK" lay "SKARIF_ARXIKA" col 34))
+  (setq items (dgm:collect (list src) T))
+  (if (null items)
+    (princ (strcat "\n** Δεν υπάρχουν κλειστά πολύγωνα στο layer " src ". **"))
+    (progn
+      (setq hlay (strcat lay "-hatch"))
+      (dgm:layer lay col)
+      (dgm:layer hlay col)
+      (setq ktexts (dgm:kaektexts))
+      ;; κάτω-αριστερή γωνία του συνόλου
+      (setq allx nil ally nil)
+      (foreach it items
+        (foreach p (cadr it)
+          (setq allx (cons (car p) allx) ally (cons (cadr p) ally))))
+      (setq minx (apply 'min allx) miny (apply 'min ally)
+            span (max (- (apply 'max allx) minx) (- (apply 'max ally) miny)))
+      (setq inpt (getpoint "\nΣημείο τοποθέτησης σκαριφήματος (κάτω-αριστερά): "))
+      (if inpt
+        (progn
+          (setq dx (- (car inpt) minx) dy (- (cadr inpt) miny))
+          (setq h (dgm:getreal "\nΎψος κειμένου ΚΑΕΚ σκαριφήματος"
+                               (if (> dgm:*h* 0) dgm:*h* (/ span 40.0))))
+          (setq dgm:*h* h)
+          (setq spacing (/ span 25.0))
+          (if (<= spacing 0.0) (setq spacing 1.0))
+          (setq cnt 0)
+          (foreach it items
+            (setq cpts (mapcar '(lambda (p) (list (+ (car p) dx) (+ (cadr p) dy)))
+                               (cadr it)))
+            (dgm:mkpoly cpts lay T)
+            (dgm:hatchpoly cpts spacing 45.0 hlay)
+            (setq kaek (dgm:kaekof (cadr it) ktexts)
+                  ip   (dgm:innerpt cpts))
+            (if (and kaek ip) (dgm:textc ip h kaek lay))
+            (setq cnt (1+ cnt)))
+          (princ (strcat "\nΔημιουργήθηκε σκαρίφημα "
+                         (if (= typ 2) "Τελικών" "Αρχικών")
+                         " ΚΑΕΚ με " (itoa cnt) " γεωτεμάχια (layers "
+                         lay " / " hlay ")."))))))
+  (princ))
+
 ;;; DGMHELP - Βοήθεια
 (defun c:DGMHELP ()
   (princ "\n----------------- Εντολές GF-DGM -----------------")
@@ -2569,6 +2664,7 @@
   (princ "\n  DGMGM     DGM_PROP_FINAL: αυτόματα υπόλοιπα από PST_KAEK")
   (princ "\n  DGMVST    VST_FINAL από LINE_XM_VST")
   (princ "\n  DGMAREAS  Αυτόματη δημιουργία AREA_A / AREA_D")
+  (princ "\n  DGMSKETCH Σκαρίφημα Αρχικών (καφέ) / Τελικών (μπλε) ΚΑΕΚ με hatch")
   (princ "\n  DGMSPLIT  Κατάτμηση πολυγώνου με γραμμή κοπής")
   (princ "\n  DGMUNION  Συνένωση όμορων πολυγώνων")
   (princ "\n  DGMCUT    Αποκοπή τμήματος από γεωτεμάχιο")
@@ -2623,7 +2719,7 @@
                    "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
                    "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
                    "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"
-                   "DGMPREP")
+                   "DGMSKETCH" "DGMPREP")
   (dgm:wrapcmd dgm:tmp))
 (setq dgm:tmp nil)
 
