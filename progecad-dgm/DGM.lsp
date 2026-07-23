@@ -2558,6 +2558,90 @@
       (if pt (dgm:north pt m))))
   (princ))
 
+;; Όρια (xmin ymin xmax ymax) όλων των LWPOLYLINE/LINE του σχεδίου
+(defun dgm:bbox ( / ss i e d et pts xmin ymin xmax ymax)
+  (setq ss (ssget "_X" '((0 . "LWPOLYLINE,LINE"))))
+  (if ss
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq e (ssname ss i) d (entget e) et (cdr (assoc 0 d)) pts nil)
+        (cond
+          ((= et "LINE")
+           (setq pts (list (cdr (assoc 10 d)) (cdr (assoc 11 d)))))
+          ((= et "LWPOLYLINE")
+           (setq pts (dgm:lwpts e))))
+        (foreach p pts
+          (if (null xmin)
+            (setq xmin (car p) xmax (car p) ymin (cadr p) ymax (cadr p))
+            (progn
+              (if (< (car p) xmin) (setq xmin (car p)))
+              (if (> (car p) xmax) (setq xmax (car p)))
+              (if (< (cadr p) ymin) (setq ymin (cadr p)))
+              (if (> (cadr p) ymax) (setq ymax (cadr p))))))
+        (setq i (1+ i)))))
+  (if xmin (list xmin ymin xmax ymax)))
+
+;;; DGMSHEET - Κάναβος-φύλλο: ύψος = 609 mm x κλίμακα (σταθερό, χαρτί),
+;;; μήκος τέτοιο ώστε να περιλαμβάνει όλες τις polylines/lines του σχεδίου.
+(defun c:DGMSHEET ( / m step bb xmin ymin xmax ymax gh yc yb ytop xl xr
+                     arm h dec lbl x y s)
+  (if (null dgm:*scale*)
+    (progn (princ "\nΔεν έχει οριστεί κλίμακα σχεδίασης.") (dgm:askscale)))
+  (setq m dgm:*scale*)
+  (setq step (dgm:getreal "\nΒήμα κανάβου (m)" (/ m 10.0)))
+  (if (<= step 0.0) (setq step (/ m 10.0)))
+  (setq bb (dgm:bbox))
+  (if (null bb)
+    (princ "\n** Δεν βρέθηκαν polylines/lines στο σχέδιο. **")
+    (progn
+      (setq xmin (car bb) ymin (cadr bb) xmax (caddr bb) ymax (cadddr bb))
+      (setq gh (* 0.609 m))              ; ύψος χαρτιού 609 mm σε μονάδες εδάφους
+      ;; κατακόρυφα: κεντράρισμα περιεχομένου, κάτω ακμή σε ακέραιο βήμα
+      (setq yc (/ (+ ymin ymax) 2.0)
+            yb (* step (fix (/ (- yc (/ gh 2.0)) step)))
+            ytop (+ yb gh))
+      ;; οριζόντια: αριστερή ακμή <= xmin, δεξιά ακμή >= xmax, σε βήματα
+      (setq xl (* step (fix (/ xmin step))))
+      (while (> xl xmin) (setq xl (- xl step)))
+      (setq xr xl)
+      (while (< xr xmax) (setq xr (+ xr step)))
+      (dgm:layer "KANABOS" 8)
+      (setq arm (* 0.0025 m) h (* 0.002 m)
+            dec (if (equal step (float (fix step)) 1e-9) 0 2))
+      (if (> (- ymax ymin) gh)
+        (princ (strcat "\n[ΠΡΟΣΟΧΗ] Το περιεχόμενο (ύψος "
+                       (rtos (- ymax ymin) 2 1) " m) ξεπερνά το ύψος του φύλλου ("
+                       (rtos gh 2 1) " m) στην κλίμακα 1:" (itoa m)
+                       " - χρειάζεται μικρότερη κλίμακα.")))
+      (setq lbl (dgm:getint "\nΑναγραφή συντεταγμένων περιμετρικά; 1 = Ναι, 0 = Όχι" 1))
+      ;; πλαίσιο φύλλου (κλειστή polyline)
+      (dgm:mkpoly (list (list xl yb) (list xr yb) (list xr ytop) (list xl ytop))
+                  "KANABOS" T)
+      ;; σταυροί κανάβου + ετικέτες σε ακέραιες συντεταγμένες εντός του φύλλου
+      (setq x xl)
+      (while (<= x (+ xr 1e-9))
+        (setq y yb)                       ; yb είναι ήδη ακέραιο βήμα
+        (while (<= y (+ ytop 1e-9))
+          (dgm:line (list (- x arm) y) (list (+ x arm) y) "KANABOS")
+          (dgm:line (list x (- y arm)) (list x (+ y arm)) "KANABOS")
+          (if (= lbl 1)
+            (progn
+              (if (equal y yb 1e-9)
+                (progn
+                  (setq s (rtos x 2 dec))
+                  (dgm:textcr (list x (- yb (* h (+ 1.5 (* 0.45 (strlen s))))))
+                              h s "KANABOS" (* 0.5 pi))))
+              (if (equal x xl 1e-9)
+                (dgm:textc (list (- xl (* 4.5 h)) y) h (rtos y 2 dec) "KANABOS"))))
+          (setq y (+ y step)))
+        (setq x (+ x step)))
+      (princ (strcat "\nΦύλλο κανάβου: ύψος " (rtos gh 2 1)
+                     " m (609 mm x 1:" (itoa m) "), μήκος "
+                     (rtos (- xr xl) 2 1) " m, βήμα " (rtos step 2 dec)
+                     " m, στο layer KANABOS."))))
+  (princ))
+
 ;;; ================ ΣΚΑΡΙΦΗΜΑΤΑ ΑΡΧΙΚΩΝ / ΤΕΛΙΚΩΝ ΚΑΕΚ ==================
 
 ;; Κεντροειδές πολυγώνου (nil αν εκφυλισμένο)
@@ -2683,6 +2767,7 @@
   (princ "\n  DGML      Δημιουργία layers ανά τύπο διαγράμματος")
   (princ "\n  DGMSCALE  Κλίμακα σχεδίασης (1:100 ως 1:2000)")
   (princ "\n  DGMGRID   Κάναβος σχεδίασης + σύμβολο βορρά")
+  (princ "\n  DGMSHEET  Κάναβος-φύλλο 609mm x κλίμακα, μήκος για όλο το σχέδιο")
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
   (princ "\nΠολύγωνα:")
@@ -2747,7 +2832,7 @@
                    "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
                    "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
                    "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"
-                   "DGMSKETCH" "DGMPREP")
+                   "DGMSHEET" "DGMSKETCH" "DGMPREP")
   (dgm:wrapcmd dgm:tmp))
 (setq dgm:tmp nil)
 
