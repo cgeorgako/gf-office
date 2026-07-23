@@ -2560,49 +2560,67 @@
 
 ;;; ================ ΣΚΑΡΙΦΗΜΑΤΑ ΑΡΧΙΚΩΝ / ΤΕΛΙΚΩΝ ΚΑΕΚ ==================
 
-;; Χειροποίητη γραμμοσκίαση: παράλληλες διαγώνιες γραμμές (γωνία angdeg)
-;; με βήμα spacing, κομμένες στο περίγραμμα του κλειστού πολυγώνου pts.
-;; Ανεξάρτητη από HATCH entity - δουλεύει σε κάθε CAD.
-(defun dgm:hatchpoly (pts spacing angdeg lay
-                      / a dx dy nx ny offs omin omax n o hits i pa pb
-                        an bn den pr px py k)
-  (setq a  (* pi (/ angdeg 180.0))
-        dx (cos a) dy (sin a)
-        nx (- (sin a)) ny (cos a)
-        n  (length pts))
-  (setq offs (mapcar '(lambda (p) (+ (* (car p) nx) (* (cadr p) ny))) pts))
-  (setq omin (apply 'min offs) omax (apply 'max offs))
-  (setq o (+ omin (* 0.5 spacing)))
-  (while (< o omax)
-    (setq hits nil i 0)
-    (while (< i n)
-      (setq pa (nth i pts) pb (nth (rem (1+ i) n) pts))
-      (setq an  (+ (* (car pa) nx) (* (cadr pa) ny))
-            bn  (+ (* (car pb) nx) (* (cadr pb) ny))
-            den (- bn an))
-      (if (> (abs den) 1e-12)
-        (progn
-          (setq pr (/ (- o an) den))
-          (if (and (>= pr -1e-9) (<= pr (+ 1.0 1e-9)))
-            (progn
-              (setq px (+ (car pa) (* pr (- (car pb) (car pa))))
-                    py (+ (cadr pa) (* pr (- (cadr pb) (cadr pa)))))
-              (setq hits (cons (cons (+ (* px dx) (* py dy)) (list px py))
-                               hits))))))
-      (setq i (1+ i)))
-    (setq hits (dgm:sortpairs hits))
-    (setq k 0)
-    (while (< (1+ k) (length hits))
-      (dgm:line (cdr (nth k hits)) (cdr (nth (1+ k) hits)) lay)
-      (setq k (+ k 2)))
-    (setq o (+ o spacing)))
-  (princ))
+;; Κεντροειδές πολυγώνου (nil αν εκφυλισμένο)
+(defun dgm:centroid (pts / n i p1 p2 a cx cy cr)
+  (setq n (length pts) i 0 a 0.0 cx 0.0 cy 0.0)
+  (while (< i n)
+    (setq p1 (nth i pts) p2 (nth (rem (1+ i) n) pts))
+    (setq cr (- (* (car p1) (cadr p2)) (* (car p2) (cadr p1))))
+    (setq a  (+ a cr)
+          cx (+ cx (* (+ (car p1) (car p2)) cr))
+          cy (+ cy (* (+ (cadr p1) (cadr p2)) cr)))
+    (setq i (1+ i)))
+  (if (> (abs a) 1e-9)
+    (list (/ cx (* 3.0 a)) (/ cy (* 3.0 a)))))
+
+;; Κέντρο πολυγώνου: κεντροειδές αν είναι εντός, αλλιώς εσωτερικό σημείο
+(defun dgm:centerpt (pts / c)
+  (setq c (dgm:centroid pts))
+  (if (and c (dgm:inpoly c pts)) c (dgm:innerpt pts)))
+
+;; Ορθογώνιο "παράθυρο" γύρω από κείμενο str ύψους h με κέντρο c
+(defun dgm:textbox (c str h / hw hh)
+  (setq hw (+ (* 0.35 h (strlen str)) (* 0.5 h))
+        hh (+ (* 0.5 h) (* 0.5 h)))
+  (list (list (- (car c) hw) (- (cadr c) hh))
+        (list (+ (car c) hw) (- (cadr c) hh))
+        (list (+ (car c) hw) (+ (cadr c) hh))
+        (list (- (car c) hw) (+ (cadr c) hh))))
+
+;; Ένας βρόχος ορίου HATCH (πολυγωνική διαδρομή)
+(defun dgm:hatchloop (pts flag / lst)
+  (setq lst (list (cons 92 flag) '(72 . 0) '(73 . 1) (cons 93 (length pts))))
+  (foreach p pts
+    (setq lst (cons (cons 10 (list (car p) (cadr p))) lst)))
+  (reverse (cons '(97 . 0) (reverse lst))))
+
+;; Solid HATCH με εξωτερικό όριο outer και προαιρετική εσωτερική "τρύπα"
+;; inner (νησίδα), ώστε το κείμενο να μην καλύπτεται.
+(defun dgm:solidhatch (outer inner lay col / d)
+  (setq d (list '(0 . "HATCH") '(100 . "AcDbEntity") (cons 8 lay)
+                (cons 62 col) '(100 . "AcDbHatch")
+                '(10 0.0 0.0 0.0) '(210 0.0 0.0 1.0)
+                '(2 . "SOLID") '(70 . 1) '(71 . 0)
+                (cons 91 (if inner 2 1))))
+  (setq d (append d (dgm:hatchloop outer 3)))
+  (if inner (setq d (append d (dgm:hatchloop inner 2))))
+  (setq d (append d (list '(75 . 1) '(76 . 1) '(98 . 0))))
+  (entmake d))
+
+;; Κεντραρισμένο κείμενο με ρητό χρώμα (για ευανάγνωστη ετικέτα σε solid)
+(defun dgm:textcC (pt h str lay col)
+  (entmake (list '(0 . "TEXT") (cons 8 lay) (cons 62 col)
+                 (cons 10 (list (car pt) (cadr pt) 0.0))
+                 (cons 11 (list (car pt) (cadr pt) 0.0))
+                 (cons 40 h) (cons 1 str) '(50 . 0.0)
+                 '(72 . 1) '(73 . 2))))
 
 ;;; DGMSKETCH - Σκαρίφημα Αρχικών (PST_KAEK, καφέ) ή Τελικών
 ;;; (DGM_PROP_FINAL, μπλε) ΚΑΕΚ σε σημείο που επιλέγει ο χρήστης:
-;;; αντίγραφα των πολυγώνων + γραμμοσκίαση + ετικέτα ΚΑΕΚ.
+;;; αντίγραφα των πολυγώνων + solid hatch + ετικέτα ΚΑΕΚ στο κέντρο,
+;;; μη καλυπτόμενη από το hatch (τρύπα-παράθυρο όπου χωράει).
 (defun c:DGMSKETCH ( / typ src lay hlay col ktexts items allx ally minx miny
-                       span inpt dx dy h spacing it cpts p ip kaek cnt)
+                       span inpt dx dy h it cpts p c s box island cnt)
   (princ "\nΣκαρίφημα:  1 = Αρχικών ΚΑΕΚ (PST_KAEK, καφέ)   2 = Τελικών ΚΑΕΚ (DGM_PROP_FINAL, μπλε)")
   (setq typ (dgm:getint "\nΕπιλογή" 1))
   (if (= typ 2)
@@ -2630,17 +2648,27 @@
           (setq h (dgm:getreal "\nΎψος κειμένου ΚΑΕΚ σκαριφήματος"
                                (if (> dgm:*h* 0) dgm:*h* (/ span 40.0))))
           (setq dgm:*h* h)
-          (setq spacing (/ span 25.0))
-          (if (<= spacing 0.0) (setq spacing 1.0))
           (setq cnt 0)
           (foreach it items
             (setq cpts (mapcar '(lambda (p) (list (+ (car p) dx) (+ (cadr p) dy)))
                                (cadr it)))
+            ;; κείμενο: πραγματικός ΚΑΕΚ (αρχικά) ή επεξεργάσιμο placeholder (τελικά)
+            (setq s (if (= typ 2) "ΑΡΙΘΜΟΣ ΚΑΕΚ" (dgm:kaekof (cadr it) ktexts)))
+            (setq c (dgm:centerpt cpts))
+            ;; παράθυρο-τρύπα μόνο αν χωράει ολόκληρο εντός του πολυγώνου
+            (setq island nil)
+            (if (and s c)
+              (progn
+                (setq box (dgm:textbox c s h))
+                (if (and (dgm:inpoly (car box) cpts)
+                         (dgm:inpoly (cadr box) cpts)
+                         (dgm:inpoly (caddr box) cpts)
+                         (dgm:inpoly (cadddr box) cpts))
+                  (setq island box))))
+            ;; solid hatch (κάτω), περίγραμμα, κείμενο (πάνω, ACI 7)
+            (dgm:solidhatch cpts island hlay col)
             (dgm:mkpoly cpts lay T)
-            (dgm:hatchpoly cpts spacing 45.0 hlay)
-            (setq kaek (dgm:kaekof (cadr it) ktexts)
-                  ip   (dgm:innerpt cpts))
-            (if (and kaek ip) (dgm:textc ip h kaek lay))
+            (if (and s c) (dgm:textcC c h s lay 7))
             (setq cnt (1+ cnt)))
           (princ (strcat "\nΔημιουργήθηκε σκαρίφημα "
                          (if (= typ 2) "Τελικών" "Αρχικών")
@@ -2664,7 +2692,7 @@
   (princ "\n  DGMGM     DGM_PROP_FINAL: αυτόματα υπόλοιπα από PST_KAEK")
   (princ "\n  DGMVST    VST_FINAL από LINE_XM_VST")
   (princ "\n  DGMAREAS  Αυτόματη δημιουργία AREA_A / AREA_D")
-  (princ "\n  DGMSKETCH Σκαρίφημα Αρχικών (καφέ) / Τελικών (μπλε) ΚΑΕΚ με hatch")
+  (princ "\n  DGMSKETCH Σκαρίφημα Αρχικών (καφέ) / Τελικών (μπλε) ΚΑΕΚ, solid hatch")
   (princ "\n  DGMSPLIT  Κατάτμηση πολυγώνου με γραμμή κοπής")
   (princ "\n  DGMUNION  Συνένωση όμορων πολυγώνων")
   (princ "\n  DGMCUT    Αποκοπή τμήματος από γεωτεμάχιο")
