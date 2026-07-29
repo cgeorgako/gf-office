@@ -214,18 +214,27 @@
 ;;; Διαβάζει τα κείμενα αρίθμησης από τα layers "σημείο_*" ώστε οι πίνακες
 ;;; να παίρνουν τους ίδιους αριθμούς με τα σημάδια του σχεδίου.
 
-;; Τοποθέτηση κειμένου αρίθμησης, μετατοπισμένο κατά dgm:*numoff*·h από την
-;; κορυφή (η κορυφή ανακτάται ακριβώς στο dgm:marks-load αφαιρώντας τη
-;; μετατόπιση από το ύψος του κειμένου).
-(defun dgm:placenum (pt h str lay / off)
-  (setq off (* dgm:*numoff* h))
-  (dgm:text (list (+ (car pt) off) (+ (cadr pt) off)) h str lay))
+;; Είναι το string καθαρός ακέραιος (αριθμός κορυφής); Χρησιμεύει ώστε το
+;; marks-load να αγνοεί άλλα κείμενα (π.χ. διαστάσεις πλευρών).
+(defun dgm:intp (s / i c ok)
+  (setq ok (> (strlen s) 0) i 1)
+  (while (and ok (<= i (strlen s)))
+    (setq c (ascii (substr s i 1)))
+    (if (or (< c 48) (> c 57)) (setq ok nil))
+    (setq i (1+ i)))
+  ok)
 
-;; Ανακτά τα σημάδια αρίθμησης ως ((x y) . αριθμός) στην ΑΚΡΙΒΗ θέση της
-;; κορυφής: το κείμενο είναι μετατοπισμένο κατά dgm:*numoff*·(ύψος), οπότε
-;; η μετατόπιση αφαιρείται με βάση το group 40 (ύψος) κάθε κειμένου. Έτσι η
-;; αναζήτηση δεν μπερδεύει γειτονικές κορυφές που απέχουν λίγο μεταξύ τους.
-(defun dgm:marks-load ( / ss i d ip h)
+;; Τοποθέτηση κειμένου αρίθμησης ΑΚΡΙΒΩΣ στην κορυφή (κεντραρισμένο). Έτσι
+;; η θέση του σημαδιού (group 10) ταυτίζεται με την κορυφή και η ανάκτηση
+;; είναι πάντα ακριβής - ανεξάρτητα από ύψος γραμματοσειράς/μετατόπιση,
+;; ώστε γειτονικές κορυφές να μη μπερδεύονται ποτέ.
+(defun dgm:placenum (pt h str lay)
+  (dgm:textc pt h str lay))
+
+;; Ανακτά τα σημάδια αρίθμησης ως ((x y) . αριθμός). Η θέση είναι η ακριβής
+;; κορυφή (τα νούμερα είναι κεντραρισμένα σε αυτήν). Αγνοούνται μη-ακέραια
+;; κείμενα (π.χ. διαστάσεις) που τυχόν βρίσκονται στο ίδιο layer.
+(defun dgm:marks-load ( / ss i d ip s)
   (setq dgm:*marks* nil)
   (setq ss (ssget "_X" '((0 . "TEXT") (8 . "σημείο_*"))))
   (if ss
@@ -234,12 +243,9 @@
       (while (< i (sslength ss))
         (setq d  (entget (ssname ss i))
               ip (cdr (assoc 10 d))
-              h  (cond ((cdr (assoc 40 d))) (dgm:*h*)))
-        (setq dgm:*marks*
-              (cons (list (- (car ip) (* dgm:*numoff* h))
-                          (- (cadr ip) (* dgm:*numoff* h))
-                          (cdr (assoc 1 d)))
-                    dgm:*marks*))
+              s  (cdr (assoc 1 d)))
+        (if (dgm:intp s)
+          (setq dgm:*marks* (cons (list (car ip) (cadr ip) s) dgm:*marks*)))
         (setq i (1+ i)))))
   dgm:*marks*)
 
@@ -436,7 +442,7 @@
             ;; νέα κορυφή
             (t
              (dgm:point pt mlay)
-             (dgm:circle pt (* 0.35 h) mlay)
+             (dgm:circle pt (* 0.9 h) mlay)
              (dgm:placenum pt h (itoa n) mlay)
              (setq done (cons pt done))
              (setq n (1+ n) cnt (1+ cnt)))))
@@ -457,10 +463,9 @@
           (setq dseen nil i 0)
           (while (< i (sslength ss))
             (setq e (ssname ss i))
-            (setq dseen (dgm:sidedims (dgm:lwpts e) (dgm:closedp e) h
-                                      (strcat "σημείο_"
-                                              (cdr (assoc 8 (entget e))))
-                                      dseen))
+            (setq lay (strcat "diast_" (cdr (assoc 8 (entget e)))))
+            (dgm:layer lay 3)
+            (setq dseen (dgm:sidedims (dgm:lwpts e) (dgm:closedp e) h lay dseen))
             (setq i (1+ i)))
           (princ "\nΤοποθετήθηκαν διαστάσεις πλευρών παράλληλα στις πλευρές.")))))
   (princ))
@@ -2278,7 +2283,7 @@
          (setq done (cons pt done)))
         (t
          (dgm:point pt mlay)
-         (dgm:circle pt (* 0.35 h) mlay)
+         (dgm:circle pt (* 0.9 h) mlay)
          (dgm:placenum pt h (itoa n) mlay)
          (setq done (cons pt done))
          (setq n (1+ n) cnt (1+ cnt))))))
