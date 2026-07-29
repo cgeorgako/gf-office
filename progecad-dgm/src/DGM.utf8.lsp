@@ -374,8 +374,35 @@
 ;;; DGMK - Μαζική αρίθμηση κορυφών σε μία ή περισσότερες polylines.
 ;;; Κορυφές που ταυτίζονται (εντός ανοχής) παίρνουν ΕΝΑΝ αριθμό, και
 ;;; κορυφές με υπάρχον σημάδι από παλαιότερη αρίθμηση δεν ξανααριθμούνται.
+;; Διαστάσεις πλευρών ως κείμενο παράλληλο στην πλευρά (ύψος h). Αποφυγή
+;; διπλής αναγραφής κοινών πλευρών μέσω λίστας κλειδιών μέσων (done).
+(defun dgm:sidedims (pts closed h lay done / n i a b dxx dyy len ar upx upy
+                       mx my key)
+  (setq n (length pts) i 0)
+  (while (< i (if closed n (1- n)))
+    (setq a (nth i pts) b (nth (rem (1+ i) n) pts))
+    (setq dxx (- (car b) (car a)) dyy (- (cadr b) (cadr a))
+          len (distance a b))
+    (if (> len 1e-6)
+      (progn
+        ;; γωνία ανάγνωσης παράλληλη στην πλευρά, όρθια στο (-90,90]
+        (setq ar (atan dyy dxx))
+        (if (> ar (/ pi 2.0)) (setq ar (- ar pi)))
+        (if (<= ar (- (/ pi 2.0))) (setq ar (+ ar pi)))
+        (setq upx (- (sin ar)) upy (cos ar))
+        (setq key (dgm:rkey (list (/ (+ (car a) (car b)) 2.0)
+                                  (/ (+ (cadr a) (cadr b)) 2.0))))
+        (if (not (member key done))
+          (progn
+            (setq mx (+ (/ (+ (car a) (car b)) 2.0) (* 0.6 h upx))
+                  my (+ (/ (+ (cadr a) (cadr b)) 2.0) (* 0.6 h upy)))
+            (dgm:textcr (list mx my) h (rtos len 2 2) lay ar)
+            (setq done (cons key done))))))
+    (setq i (1+ i)))
+  done)
+
 (defun c:DGMK ( / ss tol h n i e lay mlay a pts pt done f dd
-                  cnt skipdup skipex)
+                  cnt skipdup skipex dims dseen)
   (princ "\nΕπιλέξτε polylines για αρίθμηση κορυφών: ")
   (setq ss (ssget '((0 . "LWPOLYLINE"))))
   (if ss
@@ -383,6 +410,7 @@
       (setq h (dgm:getreal "\nΎψος κειμένου αρίθμησης" dgm:*h*))
       (setq dgm:*h* h)
       (setq tol (dgm:getreal "\nΑνοχή ταύτισης κορυφών (m)" 0.001))
+      (setq dims (dgm:getint "\nΤοποθέτηση διαστάσεων πλευρών; 1 = Ναι, 0 = Όχι" 0))
       (setq n (dgm:getint "\nΑριθμός πρώτης κορυφής" (1+ dgm:*num*)))
       (dgm:marks-load)
       (setq done nil cnt 0 skipdup 0 skipex 0)
@@ -422,7 +450,19 @@
                        (itoa skipdup))))
       (if (> skipex 0)
         (princ (strcat "\nΚορυφές με υπάρχουσα αρίθμηση που διατηρήθηκαν: "
-                       (itoa skipex))))))
+                       (itoa skipex))))
+      ;; διαστάσεις πλευρών (μόνο κείμενο, παράλληλο στην πλευρά)
+      (if (= dims 1)
+        (progn
+          (setq dseen nil i 0)
+          (while (< i (sslength ss))
+            (setq e (ssname ss i))
+            (setq dseen (dgm:sidedims (dgm:lwpts e) (dgm:closedp e) h
+                                      (strcat "σημείο_"
+                                              (cdr (assoc 8 (entget e))))
+                                      dseen))
+            (setq i (1+ i)))
+          (princ "\nΤοποθετήθηκαν διαστάσεις πλευρών παράλληλα στις πλευρές.")))))
   (princ))
 
 ;;; DGMP - Πίνακας συντεταγμένων κορυφών
@@ -2784,7 +2824,7 @@
   (princ "\n  DGMA      Χειροκίνητος χαρακτηρισμός τμήματος Α/Δ")
   (princ "\n  DGMCOPY   Αντιγραφή TOPO_PROP σε άλλα layers")
   (princ "\nΑρίθμηση - Πίνακες:")
-  (princ "\n  DGMK      Μαζική αρίθμηση κορυφών (κοινές κορυφές = ένας αριθμός)")
+  (princ "\n  DGMK      Μαζική αρίθμηση κορυφών + προαιρετικές διαστάσεις πλευρών")
   (princ "\n  DGMORIGIN Αλλαγή αρχής/φοράς κλειστής polyline")
   (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών (μία polyline)")
   (princ "\n  DGMPALL   Πίνακες για όλες τις polylines αυτόματα (layer + ΚΑΕΚ)")
