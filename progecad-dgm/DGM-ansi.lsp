@@ -58,6 +58,9 @@
    ("σημείο_AREAS"           3)
    ("pinakas_sintetagmenon"  7)
    ("Bohthitikesgrammes"     8)
+   ("Ktiriaomora"          252 35)
+   ("Mandra"                 7 20)
+   ("Syrma"                251 20)
   ))
 
 (if (null dgm:*h*)   (setq dgm:*h* 0.5))    ; προεπιλεγμένο ύψος κειμένου
@@ -66,7 +69,9 @@
 
 ;;; ------------------------- Βοηθητικές: σχεδίαση -----------------------
 
-(defun dgm:layer (name color / )
+;; Δημιουργία layer. lw = πάχος γραμμής σε 1/100 mm (π.χ. 35 = 0.35mm),
+;; nil = προεπιλογή (-3). Εφαρμόζεται μόνο κατά τη δημιουργία.
+(defun dgm:layer (name color lw)
   (if (not (tblsearch "LAYER" name))
     (entmake (list '(0 . "LAYER")
                    '(100 . "AcDbSymbolTableRecord")
@@ -74,12 +79,13 @@
                    (cons 2 name)
                    '(70 . 0)
                    (cons 62 color)
-                   '(6 . "Continuous"))))
+                   '(6 . "Continuous")
+                   (cons 370 (if lw lw -3)))))
   name)
 
 (defun dgm:layer-std (name / a)
   (setq a (assoc name dgm:*layers*))
-  (dgm:layer name (if a (cadr a) 7)))
+  (dgm:layer name (if a (cadr a) 7) (if a (caddr a))))
 
 (defun dgm:text (pt h str lay)
   (entmake (list '(0 . "TEXT") (cons 8 lay)
@@ -343,6 +349,7 @@
    "ROAD" "OT" "BLD" "VST" "EAS" "MINE" "OBJ"
    "DBOUND_RYM" "DBOUND_AIG" "DBOUND_PRL" "DBOUND_PAIG"
    "DBOUND_REM" "DBOUND_APAL" "DBOUND_PROP"
+   "Ktiriaomora" "Mandra" "Syrma"
    "Bohthitikesgrammes" "pinakas_sintetagmenon"))
 
 (setq dgm:*lay-dgm*
