@@ -57,6 +57,7 @@
    ("σημείο_DGM_PROP_FINAL"  4)
    ("σημείο_AREAS"           3)
    ("pinakas_sintetagmenon"  7)
+   ("Bohthitikesgrammes"     8)
   ))
 
 (if (null dgm:*h*)   (setq dgm:*h* 0.5))    ; προεπιλεγμένο ύψος κειμένου
@@ -342,7 +343,7 @@
    "ROAD" "OT" "BLD" "VST" "EAS" "MINE" "OBJ"
    "DBOUND_RYM" "DBOUND_AIG" "DBOUND_PRL" "DBOUND_PAIG"
    "DBOUND_REM" "DBOUND_APAL" "DBOUND_PROP"
-   "pinakas_sintetagmenon"))
+   "Bohthitikesgrammes" "pinakas_sintetagmenon"))
 
 (setq dgm:*lay-dgm*
  (append dgm:*lay-topo*
