@@ -69,9 +69,8 @@
 
 ;;; ------------------------- Βοηθητικές: σχεδίαση -----------------------
 
-;; Δημιουργία layer. lw = πάχος γραμμής σε 1/100 mm (π.χ. 35 = 0.35mm),
-;; nil = προεπιλογή (-3). Εφαρμόζεται μόνο κατά τη δημιουργία.
-(defun dgm:layer (name color lw)
+;; Δημιουργία layer (χρώμα, προεπιλεγμένο πάχος γραμμής).
+(defun dgm:layer (name color)
   (if (not (tblsearch "LAYER" name))
     (entmake (list '(0 . "LAYER")
                    '(100 . "AcDbSymbolTableRecord")
@@ -80,12 +79,27 @@
                    '(70 . 0)
                    (cons 62 color)
                    '(6 . "Continuous")
-                   (cons 370 (if lw lw -3)))))
+                   '(370 . -3))))
+  name)
+
+;; Δημιουργία layer με ρητό πάχος γραμμής σε 1/100 mm (π.χ. 35 = 0.35mm).
+(defun dgm:layer-lw (name color lw)
+  (if (not (tblsearch "LAYER" name))
+    (entmake (list '(0 . "LAYER")
+                   '(100 . "AcDbSymbolTableRecord")
+                   '(100 . "AcDbLayerTableRecord")
+                   (cons 2 name)
+                   '(70 . 0)
+                   (cons 62 color)
+                   '(6 . "Continuous")
+                   (cons 370 lw))))
   name)
 
 (defun dgm:layer-std (name / a)
   (setq a (assoc name dgm:*layers*))
-  (dgm:layer name (if a (cadr a) 7) (if a (caddr a))))
+  (if (and a (caddr a))
+    (dgm:layer-lw name (cadr a) (caddr a))
+    (dgm:layer name (if a (cadr a) 7))))
 
 (defun dgm:text (pt h str lay)
   (entmake (list '(0 . "TEXT") (cons 8 lay)
