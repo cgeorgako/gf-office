@@ -245,28 +245,121 @@
     (setq i (1+ i)))
   ok)
 
-;; Τοποθέτηση κειμένου αρίθμησης ΑΚΡΙΒΩΣ στην κορυφή (κεντραρισμένο). Έτσι
-;; η θέση του σημαδιού (group 10) ταυτίζεται με την κορυφή και η ανάκτηση
-;; είναι πάντα ακριβής - ανεξάρτητα από ύψος γραμματοσειράς/μετατόπιση,
-;; ώστε γειτονικές κορυφές να μη μπερδεύονται ποτέ.
-(defun dgm:placenum (pt h str lay)
-  (dgm:textc pt h str lay))
+;; Ακτίνα κύκλου κορυφής και μετατόπιση αριθμού (μονάδες σχεδίου)
+(if (null dgm:*vcirc*) (setq dgm:*vcirc* 0.4))
+(if (null dgm:*voff*)  (setq dgm:*voff*  1.0))
 
-;; Ανακτά τα σημάδια αρίθμησης ως ((x y) . αριθμός). Η θέση είναι η ακριβής
-;; κορυφή (τα νούμερα είναι κεντραρισμένα σε αυτήν). Αγνοούνται μη-ακέραια
-;; κείμενα (π.χ. διαστάσεις) που τυχόν βρίσκονται στο ίδιο layer.
-(defun dgm:marks-load ( / ss i d ip s)
+;; Λίστες αποφυγής επικάλυψης (αρχικοποιούνται σε κάθε εντολή αρίθμησης):
+;; dgm:*placed* = τοποθετημένες ετικέτες (x y R), dgm:*segs* = τμήματα
+;; polylines/lines προς αποφυγή.
+(defun dgm:gathersegs (ss / segs i e pts np j lst)
+  (setq segs nil i 0)
+  (while (< i (sslength ss))
+    (setq e (ssname ss i) pts (dgm:lwpts e) np (length pts) j 0)
+    (while (< j (if (dgm:closedp e) np (1- np)))
+      (setq segs (cons (list (nth j pts) (nth (rem (1+ j) np) pts)) segs))
+      (setq j (1+ j)))
+    (setq i (1+ i)))
+  (setq lst (ssget "_X" '((0 . "LINE"))))
+  (if lst
+    (progn (setq i 0)
+      (while (< i (sslength lst))
+        (setq e (entget (ssname lst i)))
+        (setq segs (cons (list (cdr (assoc 10 e)) (cdr (assoc 11 e))) segs))
+        (setq i (1+ i)))))
+  segs)
+
+;; Αρχικοποίηση αποφυγής: τμήματα + ήδη υπάρχουσες ετικέτες σημείων
+(defun dgm:avoid-init (ss / ssm i d ip)
+  (setq dgm:*segs* (dgm:gathersegs ss))
+  (setq dgm:*placed* nil)
+  (setq ssm (ssget "_X" '((0 . "TEXT") (8 . "σημείο_*"))))
+  (if ssm
+    (progn (setq i 0)
+      (while (< i (sslength ssm))
+        (setq d (entget (ssname ssm i)) ip (cdr (assoc 10 d)))
+        (if (dgm:intp (cdr (assoc 1 d)))
+          (setq dgm:*placed* (cons (list (car ip) (cadr ip) 0.5) dgm:*placed*)))
+        (setq i (1+ i))))))
+
+;; Ελεύθερη θέση ετικέτας ακτίνας R στο κέντρο c (χωρίς επικάλυψη με
+;; τοποθετημένες ετικέτες ή τμήματα)
+(defun dgm:boxfree (c r / ok pl s)
+  (setq ok T)
+  (foreach pl dgm:*placed*
+    (if (< (distance (list (car pl) (cadr pl)) c) (+ r (caddr pl)))
+      (setq ok nil)))
+  (if ok
+    (foreach s dgm:*segs*
+      (if (< (dgm:pseg c (car s) (cadr s)) r) (setq ok nil))))
+  ok)
+
+;; Κατεύθυνση "προς τα έξω" στην κορυφή idx (rad)
+(defun dgm:outdir (v pts closed idx / np p nx ix iy l e)
+  (setq np (length pts) ix 0.0 iy 0.0)
+  (setq p  (if (or closed (> idx 0)) (nth (rem (+ idx (1- np)) np) pts))
+        nx (if (or closed (< idx (1- np))) (nth (rem (1+ idx) np) pts)))
+  (if p  (progn (setq l (distance p v))
+                (if (> l 1e-9) (setq ix (+ ix (/ (- (car p) (car v)) l))
+                                    iy (+ iy (/ (- (cadr p) (cadr v)) l))))))
+  (if nx (progn (setq l (distance nx v))
+                (if (> l 1e-9) (setq ix (+ ix (/ (- (car nx) (car v)) l))
+                                    iy (+ iy (/ (- (cadr nx) (cadr v)) l))))))
+  (setq l (sqrt (+ (* ix ix) (* iy iy))))
+  (if (< l 1e-6)
+    (progn                                   ; ευθύγραμμο/άκρο: κάθετο στην πλευρά
+      (setq e (if nx nx p))
+      (if e (setq ix (- (cadr e) (cadr v)) iy (- (car v) (car e)))
+            (setq ix 1.0 iy 0.0))
+      (atan iy ix))
+    (atan (- iy) (- ix))))                   ; έξω = αντίθετο του "μέσα"
+
+;; Τοποθέτηση αριθμού κορυφής μετατοπισμένου (dgm:*voff*) περιμετρικά, σε
+;; θέση χωρίς επικάλυψη. Η ΑΚΡΙΒΗΣ κορυφή αποθηκεύεται ως XDATA (1010) ώστε
+;; η αναζήτηση να παραμένει ακριβής ανεξάρτητα από τη μετατόπιση.
+(defun dgm:placelabel (v pts closed idx h str lay / d r a0 angs da a pos found)
+  (setq d dgm:*voff*
+        r (+ (* 0.35 h (strlen str)) (* 0.6 h))
+        a0 (dgm:outdir v pts closed idx))
+  (if (and closed
+           (dgm:inpoly (list (+ (car v) (* d (cos a0))) (+ (cadr v) (* d (sin a0)))) pts))
+    (setq a0 (+ a0 pi)))
+  (setq angs '(0.0 0.698 -0.698 1.396 -1.396 2.094 -2.094 3.14159) found nil)
+  (foreach da angs
+    (if (not found)
+      (progn
+        (setq a (+ a0 da)
+              pos (list (+ (car v) (* d (cos a))) (+ (cadr v) (* d (sin a)))))
+        (if (dgm:boxfree pos r) (setq found pos)))))
+  (if (null found)
+    (setq found (list (+ (car v) (* d (cos a0))) (+ (cadr v) (* d (sin a0))))))
+  (regapp "GFDGM")
+  (entmake (list '(0 . "TEXT") (cons 8 lay)
+                 (cons 10 (list (car found) (cadr found) 0.0))
+                 (cons 11 (list (car found) (cadr found) 0.0))
+                 (cons 40 h) (cons 1 str) '(50 . 0.0) '(72 . 1) '(73 . 2)
+                 (list -3 (list "GFDGM" (cons 1010 (list (car v) (cadr v) 0.0))))))
+  (setq dgm:*placed* (cons (list (car found) (cadr found) r) dgm:*placed*))
+  found)
+
+;; Ανακτά τα σημάδια αρίθμησης ως ((x y) . αριθμός) στην ΑΚΡΙΒΗ κορυφή:
+;; προτιμάται το XDATA (1010) του κειμένου· αν λείπει, η θέση του κειμένου.
+;; Αγνοούνται μη-ακέραια κείμενα (π.χ. διαστάσεις).
+(defun dgm:marks-load ( / ss i d s v)
   (setq dgm:*marks* nil)
   (setq ss (ssget "_X" '((0 . "TEXT") (8 . "σημείο_*"))))
   (if ss
     (progn
       (setq i 0)
       (while (< i (sslength ss))
-        (setq d  (entget (ssname ss i))
-              ip (cdr (assoc 10 d))
-              s  (cdr (assoc 1 d)))
+        (setq d (entget (ssname ss i) '("GFDGM"))
+              s (cdr (assoc 1 d)))
         (if (dgm:intp s)
-          (setq dgm:*marks* (cons (list (car ip) (cadr ip) s) dgm:*marks*)))
+          (progn
+            (setq v (if (assoc -3 d)
+                      (cdr (assoc 1010 (cdr (cadr (assoc -3 d)))))))
+            (if (null v) (setq v (cdr (assoc 10 d))))
+            (setq dgm:*marks* (cons (list (car v) (cadr v) s) dgm:*marks*))))
         (setq i (1+ i)))))
   dgm:*marks*)
 
@@ -430,7 +523,7 @@
   done)
 
 (defun c:DGMK ( / ss tol h n i e lay mlay a pts pt done f dd
-                  cnt skipdup skipex dims dseen)
+                  cnt skipdup skipex dims dseen closed np k)
   (princ "\nΕπιλέξτε polylines για αρίθμηση κορυφών: ")
   (setq ss (ssget '((0 . "LWPOLYLINE"))))
   (if ss
@@ -441,6 +534,7 @@
       (setq dims (dgm:getint "\nΤοποθέτηση διαστάσεων πλευρών; 1 = Ναι, 0 = Όχι" 0))
       (setq n (dgm:getint "\nΑριθμός πρώτης κορυφής" (1+ dgm:*num*)))
       (dgm:marks-load)
+      (dgm:avoid-init ss)
       (setq done nil cnt 0 skipdup 0 skipex 0)
       (setq i 0)
       (while (< i (sslength ss))
@@ -449,8 +543,9 @@
               mlay (strcat "σημείο_" lay)
               a    (assoc mlay dgm:*layers*))
         (dgm:layer mlay (if a (cadr a) 3))
-        (setq pts (dgm:lwpts e))
-        (foreach pt pts
+        (setq pts (dgm:lwpts e) closed (dgm:closedp e) np (length pts) k 0)
+        (while (< k np)
+          (setq pt (nth k pts))
           (setq f nil)
           (foreach dd done
             (if (< (distance dd pt) tol) (setq f T)))
@@ -464,10 +559,11 @@
             ;; νέα κορυφή
             (t
              (dgm:point pt mlay)
-             (dgm:circle pt (* 0.9 h) mlay)
-             (dgm:placenum pt h (itoa n) mlay)
+             (dgm:circle pt dgm:*vcirc* mlay)
+             (dgm:placelabel pt pts closed k h (itoa n) mlay)
              (setq done (cons pt done))
-             (setq n (1+ n) cnt (1+ cnt)))))
+             (setq n (1+ n) cnt (1+ cnt))))
+          (setq k (1+ k)))
         (setq i (1+ i)))
       (if (> cnt 0) (setq dgm:*num* (1- n)))
       (princ (strcat "\nΑριθμήθηκαν " (itoa cnt) " νέες κορυφές σε "
@@ -2286,16 +2382,23 @@
 
 ;; Αυτόματη αρίθμηση κορυφών σε λίστα polylines (κανόνας DGMK: κοινές
 ;; κορυφές = ένας αριθμός, υπάρχοντα σημάδια διατηρούνται).
-(defun dgm:autonumber (ents tol h / n done e lay mlay a pt f dd cnt)
+(defun dgm:autonumber (ents tol h / n done e lay mlay a pts closed np k pt
+                         f dd cnt ss)
   (setq n (dgm:getint "\nΑριθμός πρώτης κορυφής" (1+ dgm:*num*)))
   (dgm:marks-load)
+  ;; αποφυγή επικάλυψης: όλα τα επιλεγμένα polylines
+  (setq ss (ssadd))
+  (foreach e ents (ssadd e ss))
+  (dgm:avoid-init ss)
   (setq done nil cnt 0)
   (foreach e ents
     (setq lay  (cdr (assoc 8 (entget e)))
           mlay (strcat "σημείο_" lay)
           a    (assoc mlay dgm:*layers*))
     (dgm:layer mlay (if a (cadr a) 3))
-    (foreach pt (dgm:lwpts e)
+    (setq pts (dgm:lwpts e) closed (dgm:closedp e) np (length pts) k 0)
+    (while (< k np)
+      (setq pt (nth k pts))
       (setq f nil)
       (foreach dd done
         (if (< (distance dd pt) tol) (setq f T)))
@@ -2305,10 +2408,11 @@
          (setq done (cons pt done)))
         (t
          (dgm:point pt mlay)
-         (dgm:circle pt (* 0.9 h) mlay)
-         (dgm:placenum pt h (itoa n) mlay)
+         (dgm:circle pt dgm:*vcirc* mlay)
+         (dgm:placelabel pt pts closed k h (itoa n) mlay)
          (setq done (cons pt done))
-         (setq n (1+ n) cnt (1+ cnt))))))
+         (setq n (1+ n) cnt (1+ cnt))))
+      (setq k (1+ k))))
   (if (> cnt 0) (setq dgm:*num* (1- n)))
   cnt)
 
