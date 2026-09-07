@@ -2239,6 +2239,57 @@
               (cons (car out)
                     (mapcar '(lambda (s) (strcat " / " s)) (cdr out)))))))
 
+;; Αφαίρεση προθέματος pre από το string s (αν υπάρχει)
+(defun dgm:stripprefix (s pre)
+  (if (and (>= (strlen s) (strlen pre)) (= (substr s 1 (strlen pre)) pre))
+    (substr s (1+ (strlen pre)))
+    s))
+
+;;; DGMTA - Δημιουργία πινάκων συντεταγμένων των τμημάτων AREA_A
+;;; (αποκοπτόμενα Αi) και AREA_D (διεκδικούμενα Δi). Τίτλος ανά τμήμα με
+;;; το όνομά του (από AREA_x-labels) και τον ΚΑΕΚ του γεωτεμαχίου PST_KAEK
+;;; μέσα στο οποίο βρίσκεται. Οι πίνακες στοιβάζονται αυτόματα.
+(defun c:DGMTA ( / h maxr ins x y ktexts pstl pair kind lablay labs it e pts
+                   ip nm kaek pp title ht cnt tx)
+  (setq h (dgm:getreal "\nΎψος κειμένου πινάκων" dgm:*h*))
+  (setq dgm:*h* h)
+  (setq maxr (dgm:getint "\nΜέγιστες γραμμές ανά ομάδα στηλών" 30))
+  (setq ins (getpoint "\nΣημείο εισαγωγής πινάκων (πάνω αριστερή γωνία): "))
+  (if ins
+    (progn
+      (setq x (car ins) y (cadr ins) cnt 0)
+      (dgm:marks-load)
+      (setq ktexts (dgm:kaektexts)
+            pstl (dgm:collect '("PST_KAEK") T))
+      (dgm:layer-std "pinakas_sintetagmenon")
+      (foreach pair (list (list "AREA_A" "ΑΠΟΚΟΠΤΟΜΕΝΟΥ" "AREA_A-labels")
+                          (list "AREA_D" "ΔΙΕΚΔΙΚΟΥΜΕΝΟΥ" "AREA_D-labels"))
+        (setq kind (cadr pair) lablay (caddr pair))
+        (setq labs (dgm:laytexts lablay))
+        (foreach it (dgm:collect (list (car pair)) T)
+          (setq e (car it) pts (cadr it) ip (dgm:innerpt pts))
+          ;; όνομα τμήματος από την ετικέτα (χωρίς το πρόθεμα "ΤΜΗΜΑ ")
+          (setq nm nil)
+          (foreach tx labs
+            (if (and (null nm) (dgm:inpoly (car tx) pts))
+              (setq nm (dgm:stripprefix (cdr tx) "ΤΜΗΜΑ "))))
+          ;; ΚΑΕΚ του γεωτεμαχίου PST_KAEK που περιέχει το τμήμα
+          (setq kaek nil)
+          (foreach pp pstl
+            (if (and (null kaek) ip (dgm:inpoly ip (cadr pp)))
+              (setq kaek (dgm:kaekof (cadr pp) ktexts))))
+          (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ " kind
+                              " ΤΜΗΜΑΤΟΣ " (if nm nm "?")
+                              " ΑΠΟ ΚΑΕΚ " (if kaek kaek "?")))
+          (setq ht (dgm:coordtable e title h maxr x y))
+          (setq y (- y ht (* 4.0 h)))
+          (setq cnt (1+ cnt))))
+      (if (> cnt 0)
+        (princ (strcat "\nΔημιουργήθηκαν " (itoa cnt)
+                       " πίνακες τμημάτων Αi/Δi."))
+        (princ "\n** Δεν βρέθηκαν πολύγωνα στα layers AREA_A/AREA_D. **"))))
+  (princ))
+
 ;;; DGMPALL - Αυτόματη παραγωγή πινάκων συντεταγμένων για όλες τις
 ;;; επιλεγμένες polylines. Τίτλος: layer + ΚΑΕΚ (από το κείμενο PST_KAEK
 ;;; εντός του πολυγώνου). Οι αριθμοί κορυφών διαβάζονται από τα σημάδια
@@ -2959,6 +3010,7 @@
   (princ "\n  DGMORIGIN Αλλαγή αρχής/φοράς κλειστής polyline")
   (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών (μία polyline)")
   (princ "\n  DGMPALL   Πίνακες για όλες τις polylines αυτόματα (layer + ΚΑΕΚ)")
+  (princ "\n  DGMTA     Πίνακες τμημάτων Αi (AREA_A) και Δi (AREA_D)")
   (princ "\n  DGMAUTO   Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (TOPO_PROP + PST_KAEK + DGM_PROP_FINAL)")
   (princ "\nΣημείωση: κάθε εντολή αναιρείται συνολικά με ένα U/UNDO.")
   (princ "\n  DGME      Πίνακας αρχικών/τελικών εμβαδών")
@@ -2999,7 +3051,7 @@
       (eval (list 'defun csym '()
                   (list 'dgm:runwrapped (list 'quote osym)))))))
 
-(foreach dgm:tmp '("DGML" "DGMK" "DGMP" "DGMPALL" "DGMAUTO" "DGME" "DGMT"
+(foreach dgm:tmp '("DGML" "DGMK" "DGMP" "DGMPALL" "DGMTA" "DGMAUTO" "DGME" "DGMT"
                    "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
                    "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
                    "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"

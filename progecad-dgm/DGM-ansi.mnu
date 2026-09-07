@@ -63,6 +63,7 @@
   [--]
   [Πίνακες όλων των polylines αυτόματα (DGMPALL)]^C^C_DGMPALL
   [Πίνακας συντεταγμένων μίας polyline (DGMP)]^C^C_DGMP
+  [Πίνακας τμημάτων Αi και Δi - AREA_A / AREA_D (DGMTA)]^C^C_DGMTA
   [Πίνακας αρχικών και τελικών εμβαδών (DGME)]^C^C_DGME
   [Πίνακας για τη διόρθωση των γεωτεμαχίων (DGMT)]^C^C_DGMT
   [<-Εξαγωγή συντεταγμένων σε TXT (DGMTXT)]^C^C_DGMTXT
