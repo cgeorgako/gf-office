@@ -248,6 +248,10 @@
 ;; Ακτίνα κύκλου κορυφής και μετατόπιση αριθμού (μονάδες σχεδίου)
 (if (null dgm:*vcirc*) (setq dgm:*vcirc* 0.4))
 (if (null dgm:*voff*)  (setq dgm:*voff*  1.0))
+;; Ανοχή αντιστοίχισης κορυφής<->σημαδιού. Τα σημάδια αποθηκεύονται στην
+;; ΑΚΡΙΒΗ κορυφή (XDATA), οπότε μικρή ανοχή αρκεί - και δεν "πιάνει"
+;; γειτονικές κορυφές (π.χ. στη μυτερή γωνία τριγώνου).
+(if (null dgm:*findtol*) (setq dgm:*findtol* 0.02))
 
 ;; Λίστες αποφυγής επικάλυψης (αρχικοποιούνται σε κάθε εντολή αρίθμησης):
 ;; dgm:*placed* = τοποθετημένες ετικέτες (x y R), dgm:*segs* = τμήματα
@@ -553,7 +557,7 @@
             ;; κοινή κορυφή - αριθμήθηκε ήδη σε αυτή την εκτέλεση
             (f (setq skipdup (1+ skipdup)))
             ;; έχει ήδη σημάδι αρίθμησης από παλαιότερη εκτέλεση
-            ((dgm:findnum pt (* 2.5 h))
+            ((dgm:findnum pt dgm:*findtol*)
              (setq done (cons pt done))
              (setq skipex (1+ skipex)))
             ;; νέα κορυφή
@@ -631,7 +635,7 @@
       (dgm:marks-load)
       (setq nums nil ok T)
       (foreach p pts
-        (setq n (dgm:findnum p (* 2.5 h)))
+        (setq n (dgm:findnum p dgm:*findtol*))
         (if (null n) (setq ok nil))
         (setq nums (cons n nums)))
       (setq nums (reverse nums))
@@ -2115,7 +2119,7 @@
             (setq e (ssname ss i)
                   pts (dgm:lwpts e))
             (foreach p pts
-              (setq nn (dgm:findnum p (* 2.5 h)))
+              (setq nn (dgm:findnum p dgm:*findtol*))
               (write-line (strcat (if nn nn "-") "\t"
                                   (rtos (car p) 2 3) "\t"
                                   (rtos (cadr p) 2 3))
@@ -2333,7 +2337,7 @@
             ;; αριθμοί κορυφών από τα σημάδια της DGMK
             (setq nums nil miss 0)
             (foreach p pts
-              (setq n (dgm:findnum p (* 2.5 h)))
+              (setq n (dgm:findnum p dgm:*findtol*))
               (if (null n) (setq n "-" miss (1+ miss)))
               (setq nums (cons n nums)))
             (setq nums (reverse nums))
@@ -2455,7 +2459,7 @@
         (if (< (distance dd pt) tol) (setq f T)))
       (cond
         (f nil)
-        ((dgm:findnum pt (* 2.5 h))
+        ((dgm:findnum pt dgm:*findtol*)
          (setq done (cons pt done)))
         (t
          (dgm:point pt mlay)
@@ -2474,7 +2478,7 @@
   (setq pts (dgm:lwpts e))
   (setq nums nil miss 0)
   (foreach p pts
-    (setq n (dgm:findnum p (* 2.5 h)))
+    (setq n (dgm:findnum p dgm:*findtol*))
     (if (null n) (setq n "-" miss (1+ miss)))
     (setq nums (cons n nums)))
   (setq nums (reverse nums))
