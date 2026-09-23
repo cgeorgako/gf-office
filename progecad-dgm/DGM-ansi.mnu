@@ -15,7 +15,7 @@
 [--]
 [4. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
 [5. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
-[Εντοπισμός κοντινών κορυφών - κόκκινοι κύκλοι (DGMNEAR)]^C^C_DGMNEAR
+[Σχεδόν-συμπίπτουσες κορυφές ΔΓΜ - κόκκινοι κύκλοι (DGMNEAR)]^C^C_DGMNEAR
 [--]
 [6. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
 [7. Αρίθμηση κορυφών μαζική + διαστάσεις πλευρών (DGMK)]^C^C_DGMK
@@ -56,7 +56,7 @@
   [Σκαρίφημα Αρχικών ΚΑΕΚ - PST_KAEK, καφέ solid (DGMSKETCH)]^C^C_DGMSKETCH
   [<-Σκαρίφημα Τελικών ΚΑΕΚ - DGM_PROP_FINAL, μπλε solid (DGMSKETCH)]^C^C_DGMSKETCH
 [6. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
-[Εντοπισμός κοντινών κορυφών - κόκκινοι κύκλοι (DGMNEAR)]^C^C_DGMNEAR
+[Σχεδόν-συμπίπτουσες κορυφές ΔΓΜ - κόκκινοι κύκλοι (DGMNEAR)]^C^C_DGMNEAR
 [--]
 [7. Αλλαγή αρχής-φοράς κλειστής polyline (DGMORIGIN)]^C^C_DGMORIGIN
 [8. Αρίθμηση κορυφών μαζική + διαστάσεις πλευρών (DGMK)]^C^C_DGMK

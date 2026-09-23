@@ -2981,41 +2981,54 @@
                          lay " / " hlay ")."))))))
   (princ))
 
-;;; DGMNEAR - Εντοπισμός κοντινών κορυφών (< dgm:*neartol* m)
-;;; Κυκλώνει με εμφανές κόκκινο circle κάθε κορυφή polyline που βρίσκεται
-;;; σε απόσταση μικρότερη από την ανοχή από κορυφή της ίδιας ή άλλης
-;;; polyline, και αναφέρει το συνολικό πλήθος τους.
-(if (null dgm:*neartol*) (setq dgm:*neartol* 0.002))
+;;; DGMNEAR - Εντοπισμός "σχεδόν-συμπιπτουσών" κορυφών στα layers του ΔΓΜ.
+;;; Εξετάζει ΜΟΝΟ τις polylines των layers που αφορούν το ΔΓΜ και επισημαίνει
+;;; κάθε κορυφή που ΔΕΝ ταυτίζεται με άλλη (ίδιας ή άλλης polyline) αλλά
+;;; απέχει σε ζώνη [dgm:*nearlo*, dgm:*nearhi*] (προεπιλογή 0.0004-0.005 m).
+;;; Τις κυκλώνει με εμφανή κόκκινο κύκλο και αναφέρει το πλήθος τους.
+(if (null dgm:*nearlo*) (setq dgm:*nearlo* 0.0004))
+(if (null dgm:*nearhi*) (setq dgm:*nearhi* 0.005))
 
-(defun c:DGMNEAR ( / ss i e pts p allv sorted l m a b idx j flags fp prev
-                     uniq r cnt tol)
-  (setq tol (dgm:getreal "\nΑνοχή κοντινών κορυφών (m)" dgm:*neartol*))
-  (setq dgm:*neartol* tol)
+;; Layers ΔΓΜ των οποίων οι κορυφές πρέπει να ταυτίζονται
+(setq dgm:*near-layers*
+ '("PST_KAEK" "DGM_PROP_FINAL" "TOPO_PROP" "TOPO_PROP_NEW"
+   "AREA_A" "AREA_D" "LINE_XM" "LINE_XM_VST"
+   "VST_FINAL" "EAS_FINAL" "MINE_FINAL"
+   "BOUND_IMPL" "BOUND_UNIMPL"))
+
+(defun c:DGMNEAR ( / ss i pts p allv sorted l m a b idx j flags fp prev
+                     uniq r cnt lo hi flt)
+  (setq lo (dgm:getreal "\nΚάτω όριο ζώνης απόστασης (m)" dgm:*nearlo*))
+  (setq hi (dgm:getreal "\nΑνω όριο ζώνης απόστασης (m)" dgm:*nearhi*))
+  (setq dgm:*nearlo* lo dgm:*nearhi* hi)
   ;; καθάρισμα προηγούμενων σημαδιών
   (setq ss (ssget "_X" '((8 . "KONTINES"))))
   (if ss (progn (setq i 0)
                 (while (< i (sslength ss)) (entdel (ssname ss i))
                        (setq i (1+ i)))))
-  ;; συλλογή όλων των κορυφών όλων των polylines
+  ;; φίλτρο layers (λίστα χωρισμένη με κόμμα)
+  (setq flt (car dgm:*near-layers*))
+  (foreach p (cdr dgm:*near-layers*) (setq flt (strcat flt "," p)))
+  ;; συλλογή κορυφών ΜΟΝΟ από polylines των ΔΓΜ layers
   (setq allv nil)
-  (setq ss (ssget "_X" '((0 . "LWPOLYLINE"))))
+  (setq ss (ssget "_X" (list '(0 . "LWPOLYLINE") (cons 8 flt))))
   (if (null ss)
-    (princ "\n** Δεν βρέθηκαν polylines στο σχέδιο. **")
+    (princ "\n** Δεν βρέθηκαν polylines στα layers του ΔΓΜ. **")
     (progn
       (setq i 0)
       (while (< i (sslength ss))
         (setq pts (dgm:lwpts (ssname ss i)))
         (foreach p pts (setq allv (cons (cons (car p) p) allv)))
         (setq i (1+ i)))
-      ;; ταξινόμηση κατά x για σάρωση με παράθυρο
+      ;; ταξινόμηση κατά x για σάρωση με παράθυρο πλάτους hi
       (setq sorted (mapcar 'cdr (dgm:sortpairs allv)))
-      ;; σάρωση (χωρίς nth: με δείκτες cons-cells)
       (setq flags nil idx 0 l sorted)
       (while l
         (setq a (car l) m (cdr l) j (1+ idx))
-        (while (and m (< (- (car (car m)) (car a)) tol))
+        (while (and m (< (- (car (car m)) (car a)) hi))
           (setq b (car m))
-          (if (< (distance a b) tol)
+          ;; μέσα στη ζώνη: δεν ταυτίζεται (>= lo) αλλά κοντά (<= hi)
+          (if (and (>= (distance a b) lo) (<= (distance a b) hi))
             (setq flags (cons (cons idx a) (cons (cons j b) flags))))
           (setq m (cdr m) j (1+ j)))
         (setq l (cdr l) idx (1+ idx)))
@@ -3026,13 +3039,15 @@
           (setq uniq (cons (cdr fp) uniq) prev (car fp))))
       (setq cnt (length uniq))
       (if (= cnt 0)
-        (princ "\nΔεν βρέθηκαν κοντινές κορυφές.")
+        (princ (strcat "\nΔεν βρέθηκαν σχεδόν-συμπίπτουσες κορυφές στη ζώνη "
+                       (rtos lo 2 4) " - " (rtos hi 2 4) " m."))
         (progn
           (dgm:layer-lw "KONTINES" 1 40)
           (setq r (if dgm:*scale* (* 0.004 dgm:*scale*) 0.5))
           (foreach p uniq (dgm:circle p r "KONTINES"))
           (princ (strcat "\nΒρέθηκαν " (itoa cnt)
-                         " κοντινές κορυφές (< " (rtos tol 2 4)
+                         " σχεδόν-συμπίπτουσες κορυφές (ζώνη " (rtos lo 2 4)
+                         " - " (rtos hi 2 4)
                          " m) - επισημάνθηκαν με κόκκινους κύκλους (layer KONTINES).")))))
     )
   (princ))
@@ -3047,7 +3062,7 @@
   (princ "\n  DGMSHEET  Κάναβος-φύλλο 609mm x κλίμακα, μήκος για όλο το σχέδιο")
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
-  (princ "\n  DGMNEAR   Εντοπισμός κοντινών κορυφών (< 0.002 m)")
+  (princ "\n  DGMNEAR   Σχεδόν-συμπίπτουσες κορυφές ΔΓΜ (ζώνη 0.0004-0.005 m)")
   (princ "\nΠολύγωνα:")
   (princ "\n  DGMBND    Πολύγωνο από εσωτερικό σημείο")
   (princ "\n  DGMBNDPD  Πολύγωνο από σημείο (μόνο PST_KAEK/DGM_PROP_FINAL)")
