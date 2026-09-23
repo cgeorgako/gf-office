@@ -2981,6 +2981,62 @@
                          lay " / " hlay ")."))))))
   (princ))
 
+;;; DGMNEAR - Εντοπισμός κοντινών κορυφών (< dgm:*neartol* m)
+;;; Κυκλώνει με εμφανές κόκκινο circle κάθε κορυφή polyline που βρίσκεται
+;;; σε απόσταση μικρότερη από την ανοχή από κορυφή της ίδιας ή άλλης
+;;; polyline, και αναφέρει το συνολικό πλήθος τους.
+(if (null dgm:*neartol*) (setq dgm:*neartol* 0.002))
+
+(defun c:DGMNEAR ( / ss i e pts p allv sorted l m a b idx j flags fp prev
+                     uniq r cnt tol)
+  (setq tol (dgm:getreal "\nΑνοχή κοντινών κορυφών (m)" dgm:*neartol*))
+  (setq dgm:*neartol* tol)
+  ;; καθάρισμα προηγούμενων σημαδιών
+  (setq ss (ssget "_X" '((8 . "KONTINES"))))
+  (if ss (progn (setq i 0)
+                (while (< i (sslength ss)) (entdel (ssname ss i))
+                       (setq i (1+ i)))))
+  ;; συλλογή όλων των κορυφών όλων των polylines
+  (setq allv nil)
+  (setq ss (ssget "_X" '((0 . "LWPOLYLINE"))))
+  (if (null ss)
+    (princ "\n** Δεν βρέθηκαν polylines στο σχέδιο. **")
+    (progn
+      (setq i 0)
+      (while (< i (sslength ss))
+        (setq pts (dgm:lwpts (ssname ss i)))
+        (foreach p pts (setq allv (cons (cons (car p) p) allv)))
+        (setq i (1+ i)))
+      ;; ταξινόμηση κατά x για σάρωση με παράθυρο
+      (setq sorted (mapcar 'cdr (dgm:sortpairs allv)))
+      ;; σάρωση (χωρίς nth: με δείκτες cons-cells)
+      (setq flags nil idx 0 l sorted)
+      (while l
+        (setq a (car l) m (cdr l) j (1+ idx))
+        (while (and m (< (- (car (car m)) (car a)) tol))
+          (setq b (car m))
+          (if (< (distance a b) tol)
+            (setq flags (cons (cons idx a) (cons (cons j b) flags))))
+          (setq m (cdr m) j (1+ j)))
+        (setq l (cdr l) idx (1+ idx)))
+      ;; μοναδικές κορυφές (κατά δείκτη)
+      (setq flags (dgm:sortpairs flags) prev -1 uniq nil)
+      (foreach fp flags
+        (if (/= (car fp) prev)
+          (setq uniq (cons (cdr fp) uniq) prev (car fp))))
+      (setq cnt (length uniq))
+      (if (= cnt 0)
+        (princ "\nΔεν βρέθηκαν κοντινές κορυφές.")
+        (progn
+          (dgm:layer-lw "KONTINES" 1 40)
+          (setq r (if dgm:*scale* (* 0.004 dgm:*scale*) 0.5))
+          (foreach p uniq (dgm:circle p r "KONTINES"))
+          (princ (strcat "\nΒρέθηκαν " (itoa cnt)
+                         " κοντινές κορυφές (< " (rtos tol 2 4)
+                         " m) - επισημάνθηκαν με κόκκινους κύκλους (layer KONTINES).")))))
+    )
+  (princ))
+
 ;;; DGMHELP - Βοήθεια
 (defun c:DGMHELP ()
   (princ "\n----------------- Εντολές GF-DGM -----------------")
@@ -2991,6 +3047,7 @@
   (princ "\n  DGMSHEET  Κάναβος-φύλλο 609mm x κλίμακα, μήκος για όλο το σχέδιο")
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
+  (princ "\n  DGMNEAR   Εντοπισμός κοντινών κορυφών (< 0.002 m)")
   (princ "\nΠολύγωνα:")
   (princ "\n  DGMBND    Πολύγωνο από εσωτερικό σημείο")
   (princ "\n  DGMBNDPD  Πολύγωνο από σημείο (μόνο PST_KAEK/DGM_PROP_FINAL)")
@@ -3050,7 +3107,7 @@
       (eval (list 'defun csym '()
                   (list 'dgm:runwrapped (list 'quote osym)))))))
 
-(foreach dgm:tmp '("DGML" "DGMK" "DGMP" "DGMPALL" "DGMTA" "DGMAUTO" "DGME" "DGMT"
+(foreach dgm:tmp '("DGML" "DGMK" "DGMP" "DGMPALL" "DGMTA" "DGMNEAR" "DGMAUTO" "DGME" "DGMT"
                    "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
                    "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
                    "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"
