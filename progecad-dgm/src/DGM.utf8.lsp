@@ -701,9 +701,7 @@
           (dgm:layer-std "pinakas_sintetagmenon")
           (dgm:table ins title heads wids mrows h "pinakas_sintetagmenon"
                      (if (dgm:closedp en)
-                       (strcat "Ε (" (car nums) ",...," (last nums) ", "
-                               (car nums) "): "
-                               (rtos (dgm:area pts) 2 2) " τ.μ.")
+                       (strcat "Εμβαδόν = " (rtos (dgm:area pts) 2 2) " τ.μ.")
                        nil))
           (princ (strcat "\nΟ πίνακας δημιουργήθηκε ("
                          (itoa (length pts)) " κορυφές)."))))))
@@ -2403,9 +2401,7 @@
             (dgm:table (list (car ins) y) title heads wids mrows h
                        "pinakas_sintetagmenon"
                        (if (and (dgm:closedp e) (> (length pts) 2))
-                         (strcat "Ε (" (car nums) ",...," (last nums) ", "
-                                 (car nums) "): "
-                                 (rtos (dgm:area pts) 2 2) " τ.μ.")
+                         (strcat "Εμβαδόν = " (rtos (dgm:area pts) 2 2) " τ.μ.")
                          nil))
             (setq cnt (1+ cnt))
             ;; μετατόπιση για τον επόμενο πίνακα
@@ -2528,8 +2524,7 @@
     (setq g (1+ g)))
   (dgm:table (list x y) title heads wids mrows h "pinakas_sintetagmenon"
              (if (and (dgm:closedp e) (> (length pts) 2))
-               (strcat "Ε (" (car nums) ",...," (last nums) ", " (car nums)
-                       "): " (rtos (dgm:area pts) 2 2) " τ.μ.")
+               (strcat "Εμβαδόν = " (rtos (dgm:area pts) 2 2) " τ.μ.")
                nil))
   (+ (* 2.4 h) (* 2.7 h) (* 2.0 h (length mrows))
      (if (dgm:closedp e) (* 2.0 h) 0.0)))
