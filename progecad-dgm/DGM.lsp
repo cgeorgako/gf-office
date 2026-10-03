@@ -245,6 +245,32 @@
     (setq i (1+ i)))
   ok)
 
+;; Περιγραφή περιγράμματος από τη σειρά των αριθμών κορυφών (nums) της
+;; polyline: συνεχόμενες αριθμήσεις (n, n+1, ...) ενώνονται με "..." και όταν
+;; διακόπτεται η σειρά μπαίνει κόμμα. Αν closed, κλείνει με την πρώτη κορυφή.
+(defun dgm:perimstr (nums closed / segs sstr snum last v s res)
+  (setq segs nil sstr nil snum nil last nil)
+  (foreach s nums
+    (setq v (if (dgm:intp s) (atoi s)))
+    (cond
+      ((and v last (= v (1+ last))) (setq last v))
+      (t
+       (if sstr
+         (setq segs (cons (if (and snum last (> last snum))
+                            (strcat sstr "..." (itoa last))
+                            sstr)
+                          segs)))
+       (setq sstr s snum v last v))))
+  (if sstr
+    (setq segs (cons (if (and snum last (> last snum))
+                       (strcat sstr "..." (itoa last))
+                       sstr)
+                     segs)))
+  (setq segs (reverse segs) res "")
+  (foreach s segs (setq res (if (= res "") s (strcat res ", " s))))
+  (if (and closed nums) (setq res (strcat res ", " (car nums))))
+  res)
+
 ;; Ακτίνα κύκλου κορυφής και μετατόπιση αριθμού (μονάδες σχεδίου)
 (if (null dgm:*vcirc*) (setq dgm:*vcirc* 0.4))
 (if (null dgm:*voff*)  (setq dgm:*voff*  1.0))
@@ -701,7 +727,8 @@
           (dgm:layer-std "pinakas_sintetagmenon")
           (dgm:table ins title heads wids mrows h "pinakas_sintetagmenon"
                      (if (dgm:closedp en)
-                       (strcat "Εμβαδόν = " (rtos (dgm:area pts) 2 2) " τ.μ.")
+                       (strcat "Ε (" (dgm:perimstr nums T) ") = "
+                               (rtos (dgm:area pts) 2 2) " τ.μ.")
                        nil))
           (princ (strcat "\nΟ πίνακας δημιουργήθηκε ("
                          (itoa (length pts)) " κορυφές)."))))))
@@ -2401,7 +2428,8 @@
             (dgm:table (list (car ins) y) title heads wids mrows h
                        "pinakas_sintetagmenon"
                        (if (and (dgm:closedp e) (> (length pts) 2))
-                         (strcat "Εμβαδόν = " (rtos (dgm:area pts) 2 2) " τ.μ.")
+                         (strcat "Ε (" (dgm:perimstr nums T) ") = "
+                                 (rtos (dgm:area pts) 2 2) " τ.μ.")
                          nil))
             (setq cnt (1+ cnt))
             ;; μετατόπιση για τον επόμενο πίνακα
@@ -2524,7 +2552,8 @@
     (setq g (1+ g)))
   (dgm:table (list x y) title heads wids mrows h "pinakas_sintetagmenon"
              (if (and (dgm:closedp e) (> (length pts) 2))
-               (strcat "Εμβαδόν = " (rtos (dgm:area pts) 2 2) " τ.μ.")
+               (strcat "Ε (" (dgm:perimstr nums T) ") = "
+                       (rtos (dgm:area pts) 2 2) " τ.μ.")
                nil))
   (+ (* 2.4 h) (* 2.7 h) (* 2.0 h (length mrows))
      (if (dgm:closedp e) (* 2.0 h) 0.0)))
