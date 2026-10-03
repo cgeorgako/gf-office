@@ -245,9 +245,28 @@
     (setq i (1+ i)))
   ok)
 
+;; Ανάλυση σειράς ακεραίων a..b σε αναλυτική απαρίθμηση "a, a+1, ..., b"
+(defun dgm:expandrun (a b / r k)
+  (setq r "" k a)
+  (while (<= k b)
+    (setq r (if (= r "") (itoa k) (strcat r ", " (itoa k))))
+    (setq k (1+ k)))
+  r)
+
+;; Τμήμα περιγράμματος για μια σειρά: έως 5 συνεχόμενοι αριθμοί γράφονται
+;; αναλυτικά, 6 ή περισσότεροι ενώνονται με "..."
+(defun dgm:runseg (sstr snum last)
+  (cond
+    ((and snum last (> last snum))
+     (if (<= (- last snum) 4)
+       (dgm:expandrun snum last)
+       (strcat sstr "..." (itoa last))))
+    (t sstr)))
+
 ;; Περιγραφή περιγράμματος από τη σειρά των αριθμών κορυφών (nums) της
-;; polyline: συνεχόμενες αριθμήσεις (n, n+1, ...) ενώνονται με "..." και όταν
-;; διακόπτεται η σειρά μπαίνει κόμμα. Αν closed, κλείνει με την πρώτη κορυφή.
+;; polyline: συνεχόμενες αριθμήσεις έως 5 γράφονται αναλυτικά, 6+ ενώνονται
+;; με "...", και όταν διακόπτεται η σειρά μπαίνει κόμμα. Αν closed, κλείνει
+;; με την πρώτη κορυφή.
 (defun dgm:perimstr (nums closed / segs sstr snum last v s res)
   (setq segs nil sstr nil snum nil last nil)
   (foreach s nums
@@ -255,17 +274,9 @@
     (cond
       ((and v last (= v (1+ last))) (setq last v))
       (t
-       (if sstr
-         (setq segs (cons (if (and snum last (> last snum))
-                            (strcat sstr "..." (itoa last))
-                            sstr)
-                          segs)))
+       (if sstr (setq segs (cons (dgm:runseg sstr snum last) segs)))
        (setq sstr s snum v last v))))
-  (if sstr
-    (setq segs (cons (if (and snum last (> last snum))
-                       (strcat sstr "..." (itoa last))
-                       sstr)
-                     segs)))
+  (if sstr (setq segs (cons (dgm:runseg sstr snum last) segs)))
   (setq segs (reverse segs) res "")
   (foreach s segs (setq res (if (= res "") s (strcat res ", " s))))
   (if (and closed nums) (setq res (strcat res ", " (car nums))))
