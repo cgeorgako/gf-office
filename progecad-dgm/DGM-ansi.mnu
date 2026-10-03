@@ -12,6 +12,7 @@
 [2. Κλίμακα σχεδίασης 1:100 - 1:2000 (DGMSCALE)]^C^C_DGMSCALE
 [3. Κάναβος σχεδίασης + σύμβολο βορρά (DGMGRID)]^C^C_DGMGRID
 [Κάναβος-φύλλο 609mm x κλίμακα, αυτόματο μήκος (DGMSHEET)]^C^C_DGMSHEET
+[Απόσπασμα ορθοφωτοχάρτη TOPO_PROP - Κτηματολόγιο (DGMORTHO)]^C^C_DGMORTHO
 [--]
 [4. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
 [5. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC

@@ -3092,6 +3092,84 @@
     )
   (princ))
 
+;;; ============== ΑΠΟΣΠΑΣΜΑ ΟΡΘΟΦΩΤΟΧΑΡΤΗ (Κτηματολόγιο WMS) ============
+;;; DGMORTHO - κατεβάζει ορθοφωτογραφία του bbox της TOPO_PROP από την
+;;; υπηρεσία WMS του Ελληνικού Κτηματολογίου (EPSG:2100 = ΕΓΣΑ87) και την
+;;; εισάγει γεωαναφερμένη στο σχέδιο.
+(if (null dgm:*wms-url*)
+  (setq dgm:*wms-url* "http://gis.ktimanet.gr/wms/wmsopen/wmsserver.aspx"))
+(if (null dgm:*wms-layer*) (setq dgm:*wms-layer* "KTBASEMAP"))
+(if (null dgm:*wms-fmt*)   (setq dgm:*wms-fmt* "image/png"))
+
+(defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res w h f url file cmd s)
+  (setq items (dgm:collect '("TOPO_PROP") nil))
+  (if (null items)
+    (princ "\n** Δεν βρέθηκε polyline στο layer TOPO_PROP. **")
+    (progn
+      ;; bbox όλων των κορυφών TOPO_PROP
+      (foreach it items
+        (foreach p (cadr it)
+          (if (null xmin)
+            (setq xmin (car p) xmax (car p) ymin (cadr p) ymax (cadr p))
+            (progn
+              (if (< (car p) xmin) (setq xmin (car p)))
+              (if (> (car p) xmax) (setq xmax (car p)))
+              (if (< (cadr p) ymin) (setq ymin (cadr p)))
+              (if (> (cadr p) ymax) (setq ymax (cadr p)))))))
+      (setq marg (dgm:getreal "\nΠεριθώριο γύρω από το γεωτεμάχιο (m)" 10.0))
+      (setq xmin (- xmin marg) ymin (- ymin marg)
+            xmax (+ xmax marg) ymax (+ ymax marg))
+      (setq res (dgm:getreal "\nΑνάλυση εδάφους (m/pixel)" 0.25))
+      (if (<= res 0.0) (setq res 0.25))
+      (setq w (fix (/ (- xmax xmin) res))
+            h (fix (/ (- ymax ymin) res)))
+      (if (< w 1) (setq w 1))
+      (if (< h 1) (setq h 1))
+      ;; όριο μέγιστης διάστασης εικόνας WMS
+      (if (> (max w h) 4000)
+        (progn
+          (setq f (/ 4000.0 (float (max w h))))
+          (setq w (max 1 (fix (* w f))) h (max 1 (fix (* h f))))))
+      ;; URL GetMap (WMS 1.1.1, EPSG:2100, BBOX = minx,miny,maxx,maxy)
+      (setq url (strcat dgm:*wms-url*
+                        "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS="
+                        dgm:*wms-layer* "&SRS=EPSG:2100&BBOX="
+                        (rtos xmin 2 3) "," (rtos ymin 2 3) ","
+                        (rtos xmax 2 3) "," (rtos ymax 2 3)
+                        "&WIDTH=" (itoa w) "&HEIGHT=" (itoa h)
+                        "&FORMAT=" dgm:*wms-fmt* "&STYLES="))
+      (setq file (getfiled "Αποθήκευση ορθοφωτογραφίας" "ortho_topo" "png" 1))
+      (if file
+        (progn
+          (princ (strcat "\nΛήψη ορθοφωτογραφίας (" (itoa w) "x" (itoa h)
+                         " px) από το Κτηματολόγιο..."))
+          (setq cmd (strcat "cmd /c curl -s -L -o \"" file "\" \"" url "\""))
+          (dgm:runsync cmd)
+          (if (and (findfile file) (> (dgm:fsize file) 2000))
+            (progn
+              (dgm:layer "ORTHO" 8)
+              (setvar "CLAYER" "ORTHO")
+              (setq s (/ (- xmax xmin) (float w)))
+              (command "_.-IMAGE" "_Attach" file (list xmin ymin) s 0)
+              ;; στο βάθος, ώστε οι γραμμές να φαίνονται από πάνω
+              (if (entlast)
+                (command "_.DRAWORDER" (entlast) "" "_Back"))
+              (princ (strcat "\nΕισήχθη η ορθοφωτογραφία γεωαναφερμένη ("
+                             (rtos (- xmax xmin) 2 1) " x "
+                             (rtos (- ymax ymin) 2 1) " m, layer ORTHO).")))
+            (princ (strcat "\n** Η λήψη απέτυχε ή το αρχείο είναι κενό. "
+                           "Ελέγξτε τη σύνδεση και το endpoint. **")))))))
+  (princ))
+
+;; Μέγεθος αρχείου σε bytes (0 αν δεν υπάρχει· 99999 αν δεν υποστηρίζεται)
+(defun dgm:fsize (fn / r)
+  (if (findfile fn)
+    (progn
+      (if vl-load-com (vl-load-com))
+      (setq r (vl-catch-all-apply 'vl-file-size (list fn)))
+      (if (vl-catch-all-error-p r) 99999 r))
+    0))
+
 ;;; DGMHELP - Βοήθεια
 (defun c:DGMHELP ()
   (princ "\n----------------- Εντολές GF-DGM -----------------")
@@ -3100,6 +3178,7 @@
   (princ "\n  DGMSCALE  Κλίμακα σχεδίασης (1:100 ως 1:2000)")
   (princ "\n  DGMGRID   Κάναβος σχεδίασης + σύμβολο βορρά")
   (princ "\n  DGMSHEET  Κάναβος-φύλλο 609mm x κλίμακα, μήκος για όλο το σχέδιο")
+  (princ "\n  DGMORTHO  Απόσπασμα ορθοφωτοχάρτη TOPO_PROP (Κτηματολόγιο WMS)")
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
   (princ "\n  DGMNEAR   Σχεδόν-συμπίπτουσες κορυφές ΔΓΜ (ζώνη 0.0004-0.005 m)")
@@ -3166,7 +3245,7 @@
                    "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
                    "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
                    "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"
-                   "DGMSHEET" "DGMSKETCH" "DGMPREP")
+                   "DGMSHEET" "DGMORTHO" "DGMSKETCH" "DGMPREP")
   (dgm:wrapcmd dgm:tmp))
 (setq dgm:tmp nil)
 
