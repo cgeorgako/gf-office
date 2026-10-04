@@ -3094,8 +3094,14 @@
 
 ;;; ============== ΑΠΟΣΠΑΣΜΑ ΟΡΘΟΦΩΤΟΧΑΡΤΗ (Κτηματολόγιο WMS) ============
 ;;; DGMORTHO - κατεβάζει ορθοφωτογραφία του bbox της TOPO_PROP από την
-;;; υπηρεσία WMS του Ελληνικού Κτηματολογίου (EPSG:2100 = ΕΓΣΑ87) και την
-;;; εισάγει γεωαναφερμένη στο σχέδιο.
+;;; υπηρεσία WMS του Ελληνικού Κτηματολογίου και την εισάγει γεωαναφερμένη
+;;; στο σχέδιο.
+;;;
+;;; ΣΗΜΑΝΤΙΚΟ: Η υπηρεσία BASEMAP σερβίρει εικόνα ΜΟΝΟ σε EPSG:4326 (WGS84
+;;; γεωγραφικές μοίρες lon/lat). Σε EPSG:2100 (ΕΓΣΑ87) επιστρέφει λευκή/κενή
+;;; εικόνα. Γι' αυτό το σχέδιο είναι σε ΕΓΣΑ87 αλλά το αίτημα GetMap γίνεται
+;;; σε EPSG:4326: μετατρέπουμε το bbox ΕΓΣΑ87 -> WGS84, ζητάμε την εικόνα, και
+;;; την επανατοποθετούμε γεωαναφερμένη στις μετρικές συντεταγμένες ΕΓΣΑ87.
 (if (null dgm:*wms-url*)
   (setq dgm:*wms-url* "http://gis.ktimanet.gr/wms/wmsopen/wmsserver.aspx"))
 (if (null dgm:*wms-layer*) (setq dgm:*wms-layer* "BASEMAP"))
@@ -3108,13 +3114,149 @@
         ((wcmatch (strcase fmt) "*PNG*") "png")
         (t "img")))
 
+;; --- Μετασχηματισμός ΕΓΣΑ87 (EPSG:2100) <-> WGS84 (EPSG:4326) ---
+;; Ελλειψοειδές GRS80/WGS84 (πρακτικά ταυτόσημα), εγκάρσια Mercator με
+;; κεντρικό μεσημβρινό 24°, k0=0.9996, FE=500000, FN=0. Μετάθεση datum
+;; GGRS87 -> WGS84 (3 παράμετροι): dX=-199.87, dY=74.79, dZ=246.62 (m).
+(setq dgm:*tm-a*    6378137.0)
+(setq dgm:*tm-f*    (/ 1.0 298.257222101))
+(setq dgm:*tm-e2*   (* dgm:*tm-f* (- 2.0 dgm:*tm-f*)))
+(setq dgm:*tm-k0*   0.9996)
+(setq dgm:*tm-fe*   500000.0)
+(setq dgm:*tm-fn*   0.0)
+(setq dgm:*tm-lon0* (/ (* 24.0 pi) 180.0))
+(setq dgm:*dx*     -199.87)
+(setq dgm:*dy*       74.79)
+(setq dgm:*dz*      246.62)
+
+;; Μήκος μεσημβρινού τόξου M(φ)
+(defun dgm:tm-M (phi / e2 c1 c2 c3 c4)
+  (setq e2 dgm:*tm-e2*)
+  (setq c1 (- 1.0 (/ e2 4.0) (/ (* 3.0 e2 e2) 64.0) (/ (* 5.0 e2 e2 e2) 256.0)))
+  (setq c2 (+ (/ (* 3.0 e2) 8.0) (/ (* 3.0 e2 e2) 32.0) (/ (* 45.0 e2 e2 e2) 1024.0)))
+  (setq c3 (+ (/ (* 15.0 e2 e2) 256.0) (/ (* 45.0 e2 e2 e2) 1024.0)))
+  (setq c4 (/ (* 35.0 e2 e2 e2) 3072.0))
+  (* dgm:*tm-a*
+     (+ (* c1 phi)
+        (- (* c2 (sin (* 2.0 phi))))
+        (* c3 (sin (* 4.0 phi)))
+        (- (* c4 (sin (* 6.0 phi)))))))
+
+;; Ευθεία TM: γεωγραφικές (φ,λ σε rad) -> προβολικές (E,N)
+(defun dgm:tm-fwd (phi lam / e2 ep2 n tt c aa m sp cp)
+  (setq e2 dgm:*tm-e2* ep2 (/ e2 (- 1.0 e2)))
+  (setq sp (sin phi) cp (cos phi))
+  (setq n (/ dgm:*tm-a* (sqrt (- 1.0 (* e2 sp sp)))))
+  (setq tt (* (/ sp cp) (/ sp cp)))
+  (setq c (* ep2 cp cp))
+  (setq aa (* (- lam dgm:*tm-lon0*) cp))
+  (setq m (dgm:tm-M phi))
+  (list
+    (+ dgm:*tm-fe*
+       (* dgm:*tm-k0* n
+          (+ aa
+             (* (/ (expt aa 3) 6.0) (+ (- 1.0 tt) c))
+             (* (/ (expt aa 5) 120.0)
+                (+ 5.0 (* -18.0 tt) (* tt tt) (* 72.0 c) (* -58.0 ep2))))))
+    (+ dgm:*tm-fn*
+       (* dgm:*tm-k0*
+          (+ m
+             (* n (/ sp cp)
+                (+ (/ (* aa aa) 2.0)
+                   (* (/ (expt aa 4) 24.0)
+                      (+ 5.0 (- tt) (* 9.0 c) (* 4.0 c c)))
+                   (* (/ (expt aa 6) 720.0)
+                      (+ 61.0 (* -58.0 tt) (* tt tt) (* 600.0 c) (* -330.0 ep2))))))))))
+
+;; Αντίστροφη TM: προβολικές (E,N) -> γεωγραφικές (φ,λ σε rad)
+(defun dgm:tm-inv (e n / e2 ep2 m mu e1 phi1 c1 t1 n1 r1 d sp cp phi lam)
+  (setq e2 dgm:*tm-e2* ep2 (/ e2 (- 1.0 e2)))
+  (setq m (/ (- n dgm:*tm-fn*) dgm:*tm-k0*))
+  (setq mu (/ m (* dgm:*tm-a*
+                   (- 1.0 (/ e2 4.0) (/ (* 3.0 e2 e2) 64.0)
+                      (/ (* 5.0 e2 e2 e2) 256.0)))))
+  (setq e1 (/ (- 1.0 (sqrt (- 1.0 e2))) (+ 1.0 (sqrt (- 1.0 e2)))))
+  (setq phi1 (+ mu
+                (* (- (/ (* 3.0 e1) 2.0) (/ (* 27.0 (expt e1 3)) 32.0))
+                   (sin (* 2.0 mu)))
+                (* (- (/ (* 21.0 e1 e1) 16.0) (/ (* 55.0 (expt e1 4)) 32.0))
+                   (sin (* 4.0 mu)))
+                (* (/ (* 151.0 (expt e1 3)) 96.0) (sin (* 6.0 mu)))
+                (* (/ (* 1097.0 (expt e1 4)) 512.0) (sin (* 8.0 mu)))))
+  (setq sp (sin phi1) cp (cos phi1))
+  (setq c1 (* ep2 cp cp))
+  (setq t1 (* (/ sp cp) (/ sp cp)))
+  (setq n1 (/ dgm:*tm-a* (sqrt (- 1.0 (* e2 sp sp)))))
+  (setq r1 (/ (* dgm:*tm-a* (- 1.0 e2)) (expt (- 1.0 (* e2 sp sp)) 1.5)))
+  (setq d (/ (- e dgm:*tm-fe*) (* n1 dgm:*tm-k0*)))
+  (setq phi (- phi1
+               (* (/ (* n1 (/ sp cp)) r1)
+                  (+ (/ (* d d) 2.0)
+                     (- (* (/ (expt d 4) 24.0)
+                           (+ 5.0 (* 3.0 t1) (* 10.0 c1) (* -4.0 c1 c1)
+                              (* -9.0 ep2))))
+                     (* (/ (expt d 6) 720.0)
+                        (+ 61.0 (* 90.0 t1) (* 298.0 c1) (* 45.0 t1 t1)
+                           (* -252.0 ep2) (* -3.0 c1 c1)))))))
+  (setq lam (+ dgm:*tm-lon0*
+               (/ (+ d
+                     (- (* (/ (expt d 3) 6.0) (+ 1.0 (* 2.0 t1) c1)))
+                     (* (/ (expt d 5) 120.0)
+                        (+ 5.0 (* -2.0 c1) (* 28.0 t1) (* -3.0 c1 c1)
+                           (* 8.0 ep2) (* 24.0 t1 t1))))
+                  cp)))
+  (list phi lam))
+
+;; Γεωγραφικές (φ,λ rad) -> γεωκεντρικές (X,Y,Z), ύψος 0
+(defun dgm:geo2xyz (phi lam / n sp cp)
+  (setq sp (sin phi) cp (cos phi))
+  (setq n (/ dgm:*tm-a* (sqrt (- 1.0 (* dgm:*tm-e2* sp sp)))))
+  (list (* n cp (cos lam))
+        (* n cp (sin lam))
+        (* n (- 1.0 dgm:*tm-e2*) sp)))
+
+;; Γεωκεντρικές (X,Y,Z) -> γεωγραφικές (φ,λ rad), επαναληπτικά
+(defun dgm:xyz2geo (x y z / lam p phi i n sp)
+  (setq lam (atan y x))
+  (setq p (sqrt (+ (* x x) (* y y))))
+  (setq phi (atan z (* p (- 1.0 dgm:*tm-e2*))))
+  (setq i 0)
+  (while (< i 8)
+    (setq sp (sin phi))
+    (setq n (/ dgm:*tm-a* (sqrt (- 1.0 (* dgm:*tm-e2* sp sp)))))
+    (setq phi (atan (+ z (* dgm:*tm-e2* n sp)) p))
+    (setq i (1+ i)))
+  (list phi lam))
+
+;; ΕΓΣΑ87 (E,N) -> WGS84 (lon,lat σε μοίρες)
+(defun dgm:egsa->wgs (e n / pl xyz g)
+  (setq pl (dgm:tm-inv e n))
+  (setq xyz (dgm:geo2xyz (car pl) (cadr pl)))
+  (setq xyz (list (+ (car xyz) dgm:*dx*)
+                  (+ (cadr xyz) dgm:*dy*)
+                  (+ (caddr xyz) dgm:*dz*)))
+  (setq g (dgm:xyz2geo (car xyz) (cadr xyz) (caddr xyz)))
+  (list (/ (* (cadr g) 180.0) pi)
+        (/ (* (car g) 180.0) pi)))
+
+;; WGS84 (lon,lat σε μοίρες) -> ΕΓΣΑ87 (E,N)
+(defun dgm:wgs->egsa (lon lat / phi lam xyz g)
+  (setq phi (/ (* lat pi) 180.0) lam (/ (* lon pi) 180.0))
+  (setq xyz (dgm:geo2xyz phi lam))
+  (setq xyz (list (- (car xyz) dgm:*dx*)
+                  (- (cadr xyz) dgm:*dy*)
+                  (- (caddr xyz) dgm:*dz*)))
+  (setq g (dgm:xyz2geo (car xyz) (cadr xyz) (caddr xyz)))
+  (dgm:tm-fwd (car g) (cadr g)))
+
 (defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res lyr w h f url file
-                     cmd s ext)
+                     cmd s ext ll lr ul ur lonmin lonmax latmin latmax
+                     pll pur gw gh)
   (setq items (dgm:collect '("TOPO_PROP") nil))
   (if (null items)
     (princ "\n** Δεν βρέθηκε polyline στο layer TOPO_PROP. **")
     (progn
-      ;; bbox όλων των κορυφών TOPO_PROP
+      ;; bbox όλων των κορυφών TOPO_PROP (σε ΕΓΣΑ87)
       (foreach it items
         (foreach p (cadr it)
           (if (null xmin)
@@ -3131,8 +3273,22 @@
       (if (<= res 0.0) (setq res 0.25))
       (setq lyr (dgm:getstr "\nΌνομα layer WMS" dgm:*wms-layer*))
       (setq dgm:*wms-layer* lyr)
-      (setq w (fix (/ (- xmax xmin) res))
-            h (fix (/ (- ymax ymin) res)))
+      ;; Μετατροπή των 4 γωνιών του bbox ΕΓΣΑ87 -> WGS84 lon/lat και
+      ;; υπολογισμός του γεωγραφικού bbox που περικλείει το γεωτεμάχιο.
+      (setq ll (dgm:egsa->wgs xmin ymin)
+            lr (dgm:egsa->wgs xmax ymin)
+            ul (dgm:egsa->wgs xmin ymax)
+            ur (dgm:egsa->wgs xmax ymax))
+      (setq lonmin (min (car ll) (car lr) (car ul) (car ur))
+            lonmax (max (car ll) (car lr) (car ul) (car ur))
+            latmin (min (cadr ll) (cadr lr) (cadr ul) (cadr ur))
+            latmax (max (cadr ll) (cadr lr) (cadr ul) (cadr ur)))
+      ;; Μετρικό ορθογώνιο τοποθέτησης (επαναφορά του γεωγραφικού bbox σε ΕΓΣΑ87)
+      (setq pll (dgm:wgs->egsa lonmin latmin)
+            pur (dgm:wgs->egsa lonmax latmax))
+      (setq gw (- (car pur) (car pll))
+            gh (- (cadr pur) (cadr pll)))
+      (setq w (fix (/ gw res)) h (fix (/ gh res)))
       (if (< w 1) (setq w 1))
       (if (< h 1) (setq h 1))
       ;; όριο μέγιστης διάστασης εικόνας WMS
@@ -3140,14 +3296,13 @@
         (progn
           (setq f (/ 4000.0 (float (max w h))))
           (setq w (max 1 (fix (* w f))) h (max 1 (fix (* h f))))))
-      ;; URL GetMap (WMS 1.1.1, EPSG:2100, BBOX = minx,miny,maxx,maxy)
-      ;; TRANSPARENT=FALSE + λευκό φόντο: η no-data περιοχή γίνεται λευκή
-      ;; (όχι μαύρη), EXCEPTIONS σε εικόνα για ορατά μηνύματα σφάλματος.
+      ;; URL GetMap (WMS 1.1.0, EPSG:4326, BBOX = lonmin,latmin,lonmax,latmax)
+      ;; TRANSPARENT=FALSE + λευκό φόντο: η no-data περιοχή γίνεται λευκή.
       (setq url (strcat dgm:*wms-url*
                         "?SERVICE=WMS&VERSION=1.1.0&REQUEST=GetMap&LAYERS="
-                        lyr "&SRS=EPSG:2100&BBOX="
-                        (rtos xmin 2 3) "," (rtos ymin 2 3) ","
-                        (rtos xmax 2 3) "," (rtos ymax 2 3)
+                        lyr "&SRS=EPSG:4326&BBOX="
+                        (rtos lonmin 2 8) "," (rtos latmin 2 8) ","
+                        (rtos lonmax 2 8) "," (rtos latmax 2 8)
                         "&WIDTH=" (itoa w) "&HEIGHT=" (itoa h)
                         "&FORMAT=" dgm:*wms-fmt*
                         "&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF"
@@ -3164,14 +3319,16 @@
             (progn
               (dgm:layer "ORTHO" 8)
               (setvar "CLAYER" "ORTHO")
-              (setq s (/ (- xmax xmin) (float w)))
-              (command "_.-IMAGE" "_Attach" file (list xmin ymin) s 0)
+              ;; κλίμακα = πλάτος εδάφους (m) / πλάτος εικόνας (px)
+              (setq s (/ gw (float w)))
+              (command "_.-IMAGE" "_Attach" file
+                       (list (car pll) (cadr pll)) s 0)
               ;; στο βάθος, ώστε οι γραμμές να φαίνονται από πάνω
               (if (entlast)
                 (command "_.DRAWORDER" (entlast) "" "_Back"))
               (princ (strcat "\nΕισήχθη η ορθοφωτογραφία γεωαναφερμένη ("
-                             (rtos (- xmax xmin) 2 1) " x "
-                             (rtos (- ymax ymin) 2 1) " m, layer ORTHO).")))
+                             (rtos gw 2 1) " x " (rtos gh 2 1)
+                             " m, ΕΓΣΑ87, layer ORTHO).")))
             (princ (strcat "\n** Η λήψη απέτυχε ή το αρχείο είναι κενό. "
                            "Ελέγξτε τη σύνδεση και το endpoint. **")))))))
   (princ))
