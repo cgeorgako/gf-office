@@ -3099,9 +3099,17 @@
 (if (null dgm:*wms-url*)
   (setq dgm:*wms-url* "http://gis.ktimanet.gr/wms/wmsopen/wmsserver.aspx"))
 (if (null dgm:*wms-layer*) (setq dgm:*wms-layer* "KTBASEMAP"))
-(if (null dgm:*wms-fmt*)   (setq dgm:*wms-fmt* "image/png"))
+;; JPEG: χωρίς διαφάνεια (η ορθοφωτογραφία δεν βγαίνει μαύρη στο CAD)
+(if (null dgm:*wms-fmt*)   (setq dgm:*wms-fmt* "image/jpeg"))
 
-(defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res w h f url file cmd s)
+;; Κατάληξη αρχείου από το format
+(defun dgm:fmt-ext (fmt)
+  (cond ((wcmatch (strcase fmt) "*JPEG*,*JPG*") "jpg")
+        ((wcmatch (strcase fmt) "*PNG*") "png")
+        (t "img")))
+
+(defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res lyr w h f url file
+                     cmd s ext)
   (setq items (dgm:collect '("TOPO_PROP") nil))
   (if (null items)
     (princ "\n** Δεν βρέθηκε polyline στο layer TOPO_PROP. **")
@@ -3121,6 +3129,8 @@
             xmax (+ xmax marg) ymax (+ ymax marg))
       (setq res (dgm:getreal "\nΑνάλυση εδάφους (m/pixel)" 0.25))
       (if (<= res 0.0) (setq res 0.25))
+      (setq lyr (dgm:getstr "\nΌνομα layer WMS" dgm:*wms-layer*))
+      (setq dgm:*wms-layer* lyr)
       (setq w (fix (/ (- xmax xmin) res))
             h (fix (/ (- ymax ymin) res)))
       (if (< w 1) (setq w 1))
@@ -3131,14 +3141,19 @@
           (setq f (/ 4000.0 (float (max w h))))
           (setq w (max 1 (fix (* w f))) h (max 1 (fix (* h f))))))
       ;; URL GetMap (WMS 1.1.1, EPSG:2100, BBOX = minx,miny,maxx,maxy)
+      ;; TRANSPARENT=FALSE + λευκό φόντο: η no-data περιοχή γίνεται λευκή
+      ;; (όχι μαύρη), EXCEPTIONS σε εικόνα για ορατά μηνύματα σφάλματος.
       (setq url (strcat dgm:*wms-url*
                         "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS="
-                        dgm:*wms-layer* "&SRS=EPSG:2100&BBOX="
+                        lyr "&SRS=EPSG:2100&BBOX="
                         (rtos xmin 2 3) "," (rtos ymin 2 3) ","
                         (rtos xmax 2 3) "," (rtos ymax 2 3)
                         "&WIDTH=" (itoa w) "&HEIGHT=" (itoa h)
-                        "&FORMAT=" dgm:*wms-fmt* "&STYLES="))
-      (setq file (getfiled "Αποθήκευση ορθοφωτογραφίας" "ortho_topo" "png" 1))
+                        "&FORMAT=" dgm:*wms-fmt*
+                        "&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF"
+                        "&EXCEPTIONS=application/vnd.ogc.se_inimage&STYLES="))
+      (setq ext (dgm:fmt-ext dgm:*wms-fmt*))
+      (setq file (getfiled "Αποθήκευση ορθοφωτογραφίας" "ortho_topo" ext 1))
       (if file
         (progn
           (princ (strcat "\nΛήψη ορθοφωτογραφίας (" (itoa w) "x" (itoa h)
@@ -3170,6 +3185,24 @@
       (if (vl-catch-all-error-p r) 99999 r))
     0))
 
+;;; DGMORTHOCAP - Λήψη GetCapabilities του WMS (για έλεγχο ονομάτων layers)
+(defun c:DGMORTHOCAP ( / url file cmd)
+  (setq url (strcat dgm:*wms-url*
+                    "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities"))
+  (setq file (getfiled "Αποθήκευση GetCapabilities" "wms_capabilities" "xml" 1))
+  (if file
+    (progn
+      (princ "\nΛήψη GetCapabilities...")
+      (setq cmd (strcat "cmd /c curl -s -L -o \"" file "\" \"" url "\""))
+      (dgm:runsync cmd)
+      (if (and (findfile file) (> (dgm:fsize file) 200))
+        (progn
+          (princ (strcat "\nΑποθηκεύτηκε: " file
+                         "  (δείτε τα <Layer><Name> για το σωστό layer)."))
+          (startapp "notepad.exe" file))
+        (princ "\n** Αποτυχία λήψης GetCapabilities. **"))))
+  (princ))
+
 ;;; DGMHELP - Βοήθεια
 (defun c:DGMHELP ()
   (princ "\n----------------- Εντολές GF-DGM -----------------")
@@ -3179,6 +3212,7 @@
   (princ "\n  DGMGRID   Κάναβος σχεδίασης + σύμβολο βορρά")
   (princ "\n  DGMSHEET  Κάναβος-φύλλο 609mm x κλίμακα, μήκος για όλο το σχέδιο")
   (princ "\n  DGMORTHO  Απόσπασμα ορθοφωτοχάρτη TOPO_PROP (Κτηματολόγιο WMS)")
+  (princ "\n  DGMORTHOCAP Λήψη λίστας WMS layers (GetCapabilities)")
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
   (princ "\n  DGMNEAR   Σχεδόν-συμπίπτουσες κορυφές ΔΓΜ (ζώνη 0.0004-0.005 m)")
@@ -3245,7 +3279,7 @@
                    "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
                    "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
                    "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"
-                   "DGMSHEET" "DGMORTHO" "DGMSKETCH" "DGMPREP")
+                   "DGMSHEET" "DGMORTHO" "DGMORTHOCAP" "DGMSKETCH" "DGMPREP")
   (dgm:wrapcmd dgm:tmp))
 (setq dgm:tmp nil)
 
