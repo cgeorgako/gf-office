@@ -3098,7 +3098,7 @@
 ;;; εισάγει γεωαναφερμένη στο σχέδιο.
 (if (null dgm:*wms-url*)
   (setq dgm:*wms-url* "http://gis.ktimanet.gr/wms/wmsopen/wmsserver.aspx"))
-(if (null dgm:*wms-layer*) (setq dgm:*wms-layer* "KTBASEMAP"))
+(if (null dgm:*wms-layer*) (setq dgm:*wms-layer* "BASEMAP"))
 ;; JPEG: χωρίς διαφάνεια (η ορθοφωτογραφία δεν βγαίνει μαύρη στο CAD)
 (if (null dgm:*wms-fmt*)   (setq dgm:*wms-fmt* "image/jpeg"))
 
@@ -3144,7 +3144,7 @@
       ;; TRANSPARENT=FALSE + λευκό φόντο: η no-data περιοχή γίνεται λευκή
       ;; (όχι μαύρη), EXCEPTIONS σε εικόνα για ορατά μηνύματα σφάλματος.
       (setq url (strcat dgm:*wms-url*
-                        "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS="
+                        "?SERVICE=WMS&VERSION=1.1.0&REQUEST=GetMap&LAYERS="
                         lyr "&SRS=EPSG:2100&BBOX="
                         (rtos xmin 2 3) "," (rtos ymin 2 3) ","
                         (rtos xmax 2 3) "," (rtos ymax 2 3)
@@ -3211,7 +3211,7 @@
   (princ "\n  DGMSCALE  Κλίμακα σχεδίασης (1:100 ως 1:2000)")
   (princ "\n  DGMGRID   Κάναβος σχεδίασης + σύμβολο βορρά")
   (princ "\n  DGMSHEET  Κάναβος-φύλλο 609mm x κλίμακα, μήκος για όλο το σχέδιο")
-  (princ "\n  DGMORTHO  Απόσπασμα ορθοφωτοχάρτη TOPO_PROP (Κτηματολόγιο WMS)")
+  (princ "\n  DGMORTHO  Απόσπασμα ορθοφωτοχάρτη TOPO_PROP (Κτηματολόγιο, layer BASEMAP)")
   (princ "\n  DGMORTHOCAP Λήψη λίστας WMS layers (GetCapabilities)")
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
