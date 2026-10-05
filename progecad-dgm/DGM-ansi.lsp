@@ -3249,9 +3249,50 @@
   (setq g (dgm:xyz2geo (car xyz) (cadr xyz) (caddr xyz)))
   (dgm:tm-fwd (car g) (cadr g)))
 
+;; Προσάρτηση raster γεωαναφερμένα. Επιστρέφει το entity της εικόνας ή nil.
+;; pt=κάτω-αριστερά (ΕΓΣΑ87), gw=πλάτος εδάφους (m), scmd=κλίμακα ανά pixel.
+(defun dgm:attach-image (file pt gw scmd / prev fd last en acad doc ms ins
+                                           img lo hi wdu)
+  ;; 1) Εντολή -IMAGE _Attach με FILEDIA=0 ώστε το όνομα αρχείου να διαβαστεί
+  ;;    από τη γραμμή εντολών (όχι από διάλογο αρχείων).
+  (setq prev (entlast) fd (getvar "FILEDIA"))
+  (setvar "FILEDIA" 0)
+  (vl-catch-all-apply
+    '(lambda () (command "_.-IMAGE" "_Attach" file pt scmd 0)))
+  (if fd (setvar "FILEDIA" fd))
+  (setq last (entlast))
+  (if (and last (not (eq last prev))
+           (= "IMAGE" (cdr (assoc 0 (entget last)))))
+    (setq en last))
+  ;; 2) Εφεδρική μέθοδος: ActiveX AddRaster (εντελώς χωρίς διάλογο).
+  ;;    Αυτο-βαθμονόμηση κλίμακας μέσω του bounding box (προσθήκη με κλίμακα
+  ;;    1.0, μέτρηση πλάτους, επαναπροσθήκη με τη σωστή κλίμακα).
+  (if (null en)
+    (progn
+      (if vl-load-com (vl-load-com))
+      (setq prev (entlast))
+      (vl-catch-all-apply
+        '(lambda ()
+           (setq acad (vlax-get-acad-object)
+                 doc  (vla-get-activedocument acad)
+                 ms   (vla-get-modelspace doc)
+                 ins  (vlax-3d-point (car pt) (cadr pt) 0.0)
+                 img  (vla-addraster ms file ins 1.0 0.0))
+           (vla-getboundingbox img 'lo 'hi)
+           (setq wdu (- (car (vlax-safearray->list hi))
+                        (car (vlax-safearray->list lo))))
+           (vla-delete img)
+           (vla-addraster ms file ins
+                          (if (> wdu 1e-9) (/ gw wdu) scmd) 0.0)))
+      (setq last (entlast))
+      (if (and last (not (eq last prev))
+               (= "IMAGE" (cdr (assoc 0 (entget last)))))
+        (setq en last))))
+  en)
+
 (defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res lyr w h f url file
                      cmd s ext ll lr ul ur lonmin lonmax latmin latmax
-                     pll pur gw gh sb it)
+                     pll pur gw gh sb it imgen)
   (setq items (dgm:collect '("TOPO_PROP") nil))
   (if (null items)
     (princ "\n** Δεν βρέθηκε polyline στο layer TOPO_PROP. **")
@@ -3321,20 +3362,26 @@
               (setvar "CLAYER" "ORTHO")
               ;; κλίμακα = πλάτος εδάφους (m) / πλάτος εικόνας (px)
               (setq s (/ gw (float w)))
-              (command "_.-IMAGE" "_Attach" file
-                       (list (car pll) (cadr pll)) s 0)
-              ;; η εικόνα στο βάθος
-              (if (entlast)
-                (command "_.DRAWORDER" (entlast) "" "_Back"))
-              ;; το περίγραμμα των polyline TOPO_PROP πάνω από την εικόνα
-              (setq sb (ssadd))
-              (foreach it items (ssadd (car it) sb))
-              (if (> (sslength sb) 0)
-                (command "_.DRAWORDER" sb "" "_Front"))
-              (princ (strcat "\nΕισήχθη η ορθοφωτογραφία γεωαναφερμένη ("
-                             (rtos gw 2 1) " x " (rtos gh 2 1)
-                             " m, ΕΓΣΑ87, layer ORTHO), με το περίγραμμα "
-                             "TOPO_PROP πάνω της.")))
+              (setq imgen (dgm:attach-image file
+                            (list (car pll) (cadr pll)) gw s))
+              (if imgen
+                (progn
+                  ;; η εικόνα στο βάθος
+                  (command "_.DRAWORDER" imgen "" "_Back")
+                  ;; το περίγραμμα των polyline TOPO_PROP πάνω από την εικόνα
+                  (setq sb (ssadd))
+                  (foreach it items (ssadd (car it) sb))
+                  (if (> (sslength sb) 0)
+                    (command "_.DRAWORDER" sb "" "_Front"))
+                  (princ (strcat "\nΕισήχθη η ορθοφωτογραφία γεωαναφερμένη ("
+                                 (rtos gw 2 1) " x " (rtos gh 2 1)
+                                 " m, ΕΓΣΑ87, layer ORTHO), με το περίγραμμα "
+                                 "TOPO_PROP πάνω της.")))
+                (princ (strcat "\n** Η εικόνα κατέβηκε (" file
+                               ") αλλά ΔΕΝ προσαρτήθηκε αυτόματα. Εισάγετέ την "
+                               "χειροκίνητα (IMAGEATTACH): σημείο εισαγωγής "
+                               (rtos (car pll) 2 3) "," (rtos (cadr pll) 2 3)
+                               ", κλίμακα " (rtos s 2 6) ", γωνία 0. **"))))
             (princ (strcat "\n** Η λήψη απέτυχε ή το αρχείο είναι κενό. "
                            "Ελέγξτε τη σύνδεση και το endpoint. **")))))))
   (princ))
