@@ -3251,7 +3251,7 @@
 
 (defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res lyr w h f url file
                      cmd s ext ll lr ul ur lonmin lonmax latmin latmax
-                     pll pur gw gh)
+                     pll pur gw gh sb it)
   (setq items (dgm:collect '("TOPO_PROP") nil))
   (if (null items)
     (princ "\n** Δεν βρέθηκε polyline στο layer TOPO_PROP. **")
@@ -3323,12 +3323,18 @@
               (setq s (/ gw (float w)))
               (command "_.-IMAGE" "_Attach" file
                        (list (car pll) (cadr pll)) s 0)
-              ;; στο βάθος, ώστε οι γραμμές να φαίνονται από πάνω
+              ;; η εικόνα στο βάθος
               (if (entlast)
                 (command "_.DRAWORDER" (entlast) "" "_Back"))
+              ;; το περίγραμμα των polyline TOPO_PROP πάνω από την εικόνα
+              (setq sb (ssadd))
+              (foreach it items (ssadd (car it) sb))
+              (if (> (sslength sb) 0)
+                (command "_.DRAWORDER" sb "" "_Front"))
               (princ (strcat "\nΕισήχθη η ορθοφωτογραφία γεωαναφερμένη ("
                              (rtos gw 2 1) " x " (rtos gh 2 1)
-                             " m, ΕΓΣΑ87, layer ORTHO).")))
+                             " m, ΕΓΣΑ87, layer ORTHO), με το περίγραμμα "
+                             "TOPO_PROP πάνω της.")))
             (princ (strcat "\n** Η λήψη απέτυχε ή το αρχείο είναι κενό. "
                            "Ελέγξτε τη σύνδεση και το endpoint. **")))))))
   (princ))
