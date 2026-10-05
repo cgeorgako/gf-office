@@ -3339,9 +3339,43 @@
         (command "_.SCALE" en "" (list (car pt) (cadr pt)) factor))))
   en)
 
+;; Αφαίρεση κατάληξης αρχείου (ό,τι μετά την τελευταία τελεία)
+(defun dgm:strip-ext (fn / i dot)
+  (setq i (strlen fn) dot 0)
+  (while (and (> i 0) (= dot 0))
+    (if (= (substr fn i 1) ".") (setq dot i))
+    (setq i (1- i)))
+  (if (> dot 0) (substr fn 1 (1- dot)) fn))
+
+;; Εγγραφή λιστών γραμμών σε αρχείο κειμένου
+(defun dgm:writelines (fn lines / f)
+  (if (setq f (open fn "w"))
+    (progn (foreach l lines (write-line l f)) (close f) T)
+    nil))
+
+;; Δημιουργία world file (γεωαναφοράς) δίπλα στην εικόνα, ώστε η χειροκίνητη
+;; εισαγωγή (IMAGEATTACH) να τοποθετεί την εικόνα αυτόματα στη σωστή θέση,
+;; κλίμακα και χωρίς περιστροφή. plx,ply = κάτω-αριστερά (ΕΓΣΑ87),
+;; gw,gh = διαστάσεις εδάφους (m), w,h = pixel, ext = κατάληξη εικόνας.
+;; Σειρά γραμμών: A, D, B, E, C, F (A,E=μέγεθος pixel· C,F=κέντρο άνω-αρ pixel)
+(defun dgm:make-worldfiles (file plx ply gw gh w h ext / base we ax ey cx fy lines)
+  (setq base (dgm:strip-ext file)
+        we   (if (= (strlen ext) 3)
+                 (strcat (substr ext 1 1) (substr ext 3 1) "w")
+                 "wld")
+        ax (/ gw (float w))
+        ey (- (/ gh (float h)))
+        cx (+ plx (/ ax 2.0))
+        fy (- (+ ply gh) (/ (/ gh (float h)) 2.0))
+        lines (list (rtos ax 2 10) "0.0" "0.0"
+                    (rtos ey 2 10) (rtos cx 2 6) (rtos fy 2 6)))
+  (dgm:writelines (strcat base "." we) lines)
+  (dgm:writelines (strcat base ".wld") lines)
+  (strcat base "." we))
+
 (defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res lyr w h f url file
                      cmd s ext ll lr ul ur lonmin lonmax latmin latmax
-                     pll pur gw gh sb it imgen afile)
+                     pll pur gw gh sb it imgen afile wf)
   (setq items (dgm:collect '("TOPO_PROP") nil))
   (if (null items)
     (princ "\n** Δεν βρέθηκε polyline στο layer TOPO_PROP. **")
@@ -3409,10 +3443,14 @@
             (progn
               (dgm:layer "ORTHO" 8)
               (setvar "CLAYER" "ORTHO")
+              ;; world file (γεωαναφορά) δίπλα στο jpg -> αυτόματη τοποθέτηση
+              ;; κατά τη χειροκίνητη εισαγωγή (θέση, κλίμακα, χωρίς περιστροφή)
+              (setq wf (dgm:make-worldfiles file (car pll) (cadr pll)
+                                            gw gh w h ext))
               (setq imgen (dgm:attach-image file (list (car pll) (cadr pll))))
               ;; Αν η διαδρομή έχει ελληνικούς χαρακτήρες και η προσάρτηση
-              ;; απέτυχε, κατέβασε αντίγραφο σε ASCII φάκελο και προσάρτησέ το
-              ;; από εκεί (ο raster loader δεν ανοίγει ελληνικές διαδρομές).
+              ;; απέτυχε, κατέβασε αντίγραφο σε ASCII φάκελο (με world file)
+              ;; και προσάρτησέ το από εκεί.
               (if (and (null imgen) (not (dgm:asciip file)) (dgm:cache-dir))
                 (progn
                   (setq afile (strcat (dgm:cache-dir) "ortho_" (dgm:stamp)
@@ -3420,9 +3458,17 @@
                   (dgm:runsync (strcat "cmd /c curl -s -L -o \"" afile
                                        "\" \"" url "\""))
                   (if (and (findfile afile) (> (dgm:fsize afile) 2000))
-                    (setq imgen (dgm:attach-image afile
-                                  (list (car pll) (cadr pll)))
-                          file afile))))
+                    (progn
+                      (dgm:make-worldfiles afile (car pll) (cadr pll)
+                                           gw gh w h ext)
+                      (setq imgen (dgm:attach-image afile
+                                    (list (car pll) (cadr pll)))
+                            file afile
+                            wf (strcat (dgm:strip-ext afile) "."
+                                       (if (= (strlen ext) 3)
+                                         (strcat (substr ext 1 1)
+                                                 (substr ext 3 1) "w")
+                                         "wld")))))))
               (if imgen
                 (progn
                   ;; διόρθωση κλίμακας ώστε το πλάτος να γίνει ακριβώς gw (m)
@@ -3438,16 +3484,19 @@
                                  (rtos gw 2 1) " x " (rtos gh 2 1)
                                  " m, ΕΓΣΑ87, layer ORTHO), με το περίγραμμα "
                                  "TOPO_PROP πάνω της.\nΑρχείο εικόνας: " file
+                                 "\nWorld file: " wf
                                  "\nΑν υπάρχει μικρή ομοιόμορφη μετατόπιση "
-                                 "(~10-15 m, όριο ακρίβειας datum), "
-                                 "ευθυγραμμίστε με μία εντολή MOVE πάνω στο "
-                                 "περίγραμμα TOPO_PROP.")))
-                (princ (strcat "\n** Η εικόνα κατέβηκε (" file
-                               ") αλλά ΔΕΝ προσαρτήθηκε αυτόματα. Εισάγετέ την "
-                               "χειροκίνητα (IMAGEATTACH): σημείο εισαγωγής "
-                               (rtos (car pll) 2 3) "," (rtos (cadr pll) 2 3)
-                               ", γωνία 0, και προσαρμόστε το πλάτος σε "
-                               (rtos gw 2 2) " m. **"))))
+                                 "(~10 m, όριο ακρίβειας datum), ευθυγραμμίστε "
+                                 "με μία εντολή MOVE πάνω στο περίγραμμα "
+                                 "TOPO_PROP.")))
+                (princ (strcat "\n** Η εικόνα κατέβηκε αλλά ΔΕΝ προσαρτήθηκε "
+                               "αυτόματα σε αυτή την έκδοση. Δημιουργήθηκε "
+                               "world file δίπλα της:\n  Εικόνα: " file
+                               "\n  World file: " wf
+                               "\nΚάντε απλώς IMAGEATTACH και επιλέξτε την "
+                               "εικόνα - θα τοποθετηθεί ΑΥΤΟΜΑΤΑ στη σωστή "
+                               "θέση και κλίμακα (τυχόν μικρή μετατόπιση ~10 m "
+                               "με μία MOVE στο περίγραμμα TOPO_PROP). **"))))
             (princ (strcat "\n** Η λήψη απέτυχε ή το αρχείο είναι κενό. "
                            "Ελέγξτε τη σύνδεση και το endpoint. **")))))))
   (princ))
