@@ -3249,6 +3249,34 @@
   (setq g (dgm:xyz2geo (car xyz) (cadr xyz) (caddr xyz)))
   (dgm:tm-fwd (car g) (cadr g)))
 
+;; Αληθές αν η συμβολοσειρά περιέχει μόνο χαρακτήρες ASCII (<128). Διαδρομές
+;; με ελληνικούς χαρακτήρες δεν φορτώνονται από τον raster loader/COM όταν
+;; περνούν ως συμβολοσειρά εντολής, γι' αυτό τις ανιχνεύουμε.
+(defun dgm:asciip (s / i ok)
+  (setq ok T i 0)
+  (while (< i (strlen s))
+    (if (> (ascii (substr s (1+ i) 1)) 127) (setq ok nil))
+    (setq i (1+ i)))
+  ok)
+
+;; Φάκελος cache με ASCII διαδρομή (για εικόνες όταν το project path είναι
+;; ελληνικό). Επιστρέφει τη διαδρομή (με \\ στο τέλος) ή nil.
+(defun dgm:cache-dir ( / d r)
+  (setq d "C:\\progecad_ortho\\")
+  (vl-catch-all-apply
+    '(lambda () (if (not (vl-file-directory-p d)) (vl-mkdir d))))
+  (setq r (vl-catch-all-apply '(lambda () (vl-file-directory-p d))))
+  (if (and (not (vl-catch-all-error-p r)) r) d nil))
+
+;; Χρονοσφραγίδα ASCII από το CDATE (π.χ. 20260105_153245)
+(defun dgm:stamp ( / c o i ch)
+  (setq c (rtos (getvar "CDATE") 2 6) o "" i 0)
+  (while (< i (strlen c))
+    (setq ch (substr c (1+ i) 1))
+    (setq o (strcat o (if (= ch ".") "_" ch)))
+    (setq i (1+ i)))
+  o)
+
 ;; Προσάρτηση raster γεωαναφερμένα. Επιστρέφει το entity της εικόνας ή nil.
 ;; pt=κάτω-αριστερά (ΕΓΣΑ87), gw=πλάτος εδάφους (m), scmd=κλίμακα ανά pixel.
 (defun dgm:attach-image (file pt gw scmd / prev fd last en acad doc ms ins
@@ -3282,17 +3310,21 @@
            (setq wdu (- (car (vlax-safearray->list hi))
                         (car (vlax-safearray->list lo))))
            (vla-delete img)
-           (vla-addraster ms file ins
-                          (if (> wdu 1e-9) (/ gw wdu) scmd) 0.0)))
-      (setq last (entlast))
-      (if (and last (not (eq last prev))
-               (= "IMAGE" (cdr (assoc 0 (entget last)))))
-        (setq en last))))
+           (setq img (vla-addraster ms file ins
+                       (if (> wdu 1e-9) (/ gw wdu) scmd) 0.0))
+           (setq en (vlax-vla-object->ename img))))
+      ;; αν η επιστροφή απέτυχε αλλά δημιουργήθηκε οντότητα, υιοθέτησέ την
+      (if (or (null en) (/= 'ENAME (type en)))
+        (progn
+          (setq en nil last (entlast))
+          (if (and last (not (eq last prev))
+                   (= "IMAGE" (cdr (assoc 0 (entget last)))))
+            (setq en last))))))
   en)
 
 (defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res lyr w h f url file
                      cmd s ext ll lr ul ur lonmin lonmax latmin latmax
-                     pll pur gw gh sb it imgen)
+                     pll pur gw gh sb it imgen afile)
   (setq items (dgm:collect '("TOPO_PROP") nil))
   (if (null items)
     (princ "\n** Δεν βρέθηκε polyline στο layer TOPO_PROP. **")
@@ -3364,6 +3396,19 @@
               (setq s (/ gw (float w)))
               (setq imgen (dgm:attach-image file
                             (list (car pll) (cadr pll)) gw s))
+              ;; Αν η διαδρομή έχει ελληνικούς χαρακτήρες και η προσάρτηση
+              ;; απέτυχε, κατέβασε αντίγραφο σε ASCII φάκελο και προσάρτησέ το
+              ;; από εκεί (ο raster loader δεν ανοίγει ελληνικές διαδρομές).
+              (if (and (null imgen) (not (dgm:asciip file)) (dgm:cache-dir))
+                (progn
+                  (setq afile (strcat (dgm:cache-dir) "ortho_" (dgm:stamp)
+                                      "." ext))
+                  (dgm:runsync (strcat "cmd /c curl -s -L -o \"" afile
+                                       "\" \"" url "\""))
+                  (if (and (findfile afile) (> (dgm:fsize afile) 2000))
+                    (setq imgen (dgm:attach-image afile
+                                  (list (car pll) (cadr pll)) gw s)
+                          file afile))))
               (if imgen
                 (progn
                   ;; η εικόνα στο βάθος
@@ -3376,7 +3421,8 @@
                   (princ (strcat "\nΕισήχθη η ορθοφωτογραφία γεωαναφερμένη ("
                                  (rtos gw 2 1) " x " (rtos gh 2 1)
                                  " m, ΕΓΣΑ87, layer ORTHO), με το περίγραμμα "
-                                 "TOPO_PROP πάνω της.")))
+                                 "TOPO_PROP πάνω της.\nΑρχείο εικόνας: " file
+                                 "  (να διατηρηθεί για να εμφανίζεται).")))
                 (princ (strcat "\n** Η εικόνα κατέβηκε (" file
                                ") αλλά ΔΕΝ προσαρτήθηκε αυτόματα. Εισάγετέ την "
                                "χειροκίνητα (IMAGEATTACH): σημείο εισαγωγής "
