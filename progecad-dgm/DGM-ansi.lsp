@@ -3278,23 +3278,22 @@
   o)
 
 ;; Προσάρτηση raster γεωαναφερμένα. Επιστρέφει το entity της εικόνας ή nil.
-;; pt=κάτω-αριστερά (ΕΓΣΑ87), gw=πλάτος εδάφους (m), scmd=κλίμακα ανά pixel.
-(defun dgm:attach-image (file pt gw scmd / prev fd last en acad doc ms ins
-                                           img lo hi wdu)
+;; pt=κάτω-αριστερά (ΕΓΣΑ87). Προσαρτά με κλίμακα 1.0· η σωστή κλίμακα
+;; μπαίνει μετά με dgm:fit-image (η έννοια του scale factor διαφέρει ανά
+;; έκδοση, γι' αυτό μετράμε το αποτέλεσμα αντί να τη μαντεύουμε).
+(defun dgm:attach-image (file pt / prev fd last en acad doc ms ins img)
   ;; 1) Εντολή -IMAGE _Attach με FILEDIA=0 ώστε το όνομα αρχείου να διαβαστεί
   ;;    από τη γραμμή εντολών (όχι από διάλογο αρχείων).
   (setq prev (entlast) fd (getvar "FILEDIA"))
   (setvar "FILEDIA" 0)
   (vl-catch-all-apply
-    '(lambda () (command "_.-IMAGE" "_Attach" file pt scmd 0)))
+    '(lambda () (command "_.-IMAGE" "_Attach" file pt 1.0 0)))
   (if fd (setvar "FILEDIA" fd))
   (setq last (entlast))
   (if (and last (not (eq last prev))
            (= "IMAGE" (cdr (assoc 0 (entget last)))))
     (setq en last))
   ;; 2) Εφεδρική μέθοδος: ActiveX AddRaster (εντελώς χωρίς διάλογο).
-  ;;    Αυτο-βαθμονόμηση κλίμακας μέσω του bounding box (προσθήκη με κλίμακα
-  ;;    1.0, μέτρηση πλάτους, επαναπροσθήκη με τη σωστή κλίμακα).
   (if (null en)
     (progn
       (if vl-load-com (vl-load-com))
@@ -3306,12 +3305,6 @@
                  ms   (vla-get-modelspace doc)
                  ins  (vlax-3d-point (car pt) (cadr pt) 0.0)
                  img  (vla-addraster ms file ins 1.0 0.0))
-           (vla-getboundingbox img 'lo 'hi)
-           (setq wdu (- (car (vlax-safearray->list hi))
-                        (car (vlax-safearray->list lo))))
-           (vla-delete img)
-           (setq img (vla-addraster ms file ins
-                       (if (> wdu 1e-9) (/ gw wdu) scmd) 0.0))
            (setq en (vlax-vla-object->ename img))))
       ;; αν η επιστροφή απέτυχε αλλά δημιουργήθηκε οντότητα, υιοθέτησέ την
       (if (or (null en) (/= 'ENAME (type en)))
@@ -3320,6 +3313,30 @@
           (if (and last (not (eq last prev))
                    (= "IMAGE" (cdr (assoc 0 (entget last)))))
             (setq en last))))))
+  en)
+
+;; Προσαρμογή κλίμακας: μετρά το πραγματικό πλάτος της εικόνας (από το U-vector
+;; group 11 και το μέγεθος σε pixel group 13, ή μέσω bounding box) και την
+;; κλιμακώνει ώστε το πλάτος να γίνει ακριβώς gw (m), με βάση το pt (κάτω-αρ).
+(defun dgm:fit-image (en pt gw / d uvec sz curw factor obj lo hi)
+  (setq d (entget en)
+        uvec (cdr (assoc 11 d))
+        sz   (cdr (assoc 13 d)))
+  (if (and uvec sz)
+    (setq curw (* (distance '(0.0 0.0 0.0) uvec) (car sz))))
+  (if (or (null curw) (<= curw 1e-9))
+    (vl-catch-all-apply
+      '(lambda ()
+         (if vl-load-com (vl-load-com))
+         (setq obj (vlax-ename->vla-object en))
+         (vla-getboundingbox obj 'lo 'hi)
+         (setq curw (- (car (vlax-safearray->list hi))
+                       (car (vlax-safearray->list lo)))))))
+  (if (and curw (> curw 1e-9))
+    (progn
+      (setq factor (/ gw curw))
+      (if (> (abs (- factor 1.0)) 1e-6)
+        (command "_.SCALE" en "" (list (car pt) (cadr pt)) factor))))
   en)
 
 (defun c:DGMORTHO ( / items xmin ymin xmax ymax p marg res lyr w h f url file
@@ -3392,10 +3409,7 @@
             (progn
               (dgm:layer "ORTHO" 8)
               (setvar "CLAYER" "ORTHO")
-              ;; κλίμακα = πλάτος εδάφους (m) / πλάτος εικόνας (px)
-              (setq s (/ gw (float w)))
-              (setq imgen (dgm:attach-image file
-                            (list (car pll) (cadr pll)) gw s))
+              (setq imgen (dgm:attach-image file (list (car pll) (cadr pll))))
               ;; Αν η διαδρομή έχει ελληνικούς χαρακτήρες και η προσάρτηση
               ;; απέτυχε, κατέβασε αντίγραφο σε ASCII φάκελο και προσάρτησέ το
               ;; από εκεί (ο raster loader δεν ανοίγει ελληνικές διαδρομές).
@@ -3407,10 +3421,12 @@
                                        "\" \"" url "\""))
                   (if (and (findfile afile) (> (dgm:fsize afile) 2000))
                     (setq imgen (dgm:attach-image afile
-                                  (list (car pll) (cadr pll)) gw s)
+                                  (list (car pll) (cadr pll)))
                           file afile))))
               (if imgen
                 (progn
+                  ;; διόρθωση κλίμακας ώστε το πλάτος να γίνει ακριβώς gw (m)
+                  (dgm:fit-image imgen (list (car pll) (cadr pll)) gw)
                   ;; η εικόνα στο βάθος
                   (command "_.DRAWORDER" imgen "" "_Back")
                   ;; το περίγραμμα των polyline TOPO_PROP πάνω από την εικόνα
@@ -3422,12 +3438,16 @@
                                  (rtos gw 2 1) " x " (rtos gh 2 1)
                                  " m, ΕΓΣΑ87, layer ORTHO), με το περίγραμμα "
                                  "TOPO_PROP πάνω της.\nΑρχείο εικόνας: " file
-                                 "  (να διατηρηθεί για να εμφανίζεται).")))
+                                 "\nΑν υπάρχει μικρή ομοιόμορφη μετατόπιση "
+                                 "(~10-15 m, όριο ακρίβειας datum), "
+                                 "ευθυγραμμίστε με μία εντολή MOVE πάνω στο "
+                                 "περίγραμμα TOPO_PROP.")))
                 (princ (strcat "\n** Η εικόνα κατέβηκε (" file
                                ") αλλά ΔΕΝ προσαρτήθηκε αυτόματα. Εισάγετέ την "
                                "χειροκίνητα (IMAGEATTACH): σημείο εισαγωγής "
                                (rtos (car pll) 2 3) "," (rtos (cadr pll) 2 3)
-                               ", κλίμακα " (rtos s 2 6) ", γωνία 0. **"))))
+                               ", γωνία 0, και προσαρμόστε το πλάτος σε "
+                               (rtos gw 2 2) " m. **"))))
             (princ (strcat "\n** Η λήψη απέτυχε ή το αρχείο είναι κενό. "
                            "Ελέγξτε τη σύνδεση και το endpoint. **")))))))
   (princ))
