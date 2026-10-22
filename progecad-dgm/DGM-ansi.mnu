@@ -36,6 +36,56 @@
 ***POP2
 **DGMDGM
 [ΔΓΜ]
+[->Ροή Εργασίας]
+  [->Α. ΔΓΜ για Πράξη (κατάτμηση/συνένωση)]
+    [1. Δημιουργία Layers (DGML)]^C^C_DGML
+    [2. (χειροκίνητα) Εισαγωγή αρχικών ΚΑΕΚ PST_KAEK + αριθμών]^C^C
+    [3. (προαιρετικά) Ορθοφωτοχάρτης αναφοράς (DGMORTHO)]^C^C_DGMORTHO
+    [4. Καθαρισμός σφαλμάτων (DGMCLEAN)]^C^C_DGMCLEAN
+    [5. Δημιουργία πολυγώνων από σημείο (DGMBND)]^C^C_DGMBND
+    [6. DGM_PROP_FINAL: Κατάτμηση PST_KAEK με LINE_XM (DGMKAT)]^C^C_DGMKAT
+    [7. Συνένωση όμορων πολυγώνων (DGMUNION)]^C^C_DGMUNION
+    [8. Κατάτμηση πολυγώνου με γραμμή κοπής (DGMSPLIT)]^C^C_DGMSPLIT
+    [9. Αποκοπή τμήματος από γεωτεμάχιο (DGMCUT)]^C^C_DGMCUT
+    [10. DGM_PROP_FINAL: Αυτόματα υπόλοιπα από PST_KAEK (DGMGM)]^C^C_DGMGM
+    [11. Χαρακτηρισμός τμημάτων Α (προστίθενται) / Δ (αφαιρούνται) (DGMA)]^C^C_DGMA
+    [12. Δημιουργία AREA_A και AREA_D (DGMAREAS)]^C^C_DGMAREAS
+    [13. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
+    [14. Σχεδόν-συμπίπτουσες κορυφές (DGMNEAR)]^C^C_DGMNEAR
+    [15. Αρχή/φορά κλειστών polyline (DGMORIGIN)]^C^C_DGMORIGIN
+    [16. Αρίθμηση κορυφών + διαστάσεις (DGMK)]^C^C_DGMK
+    [17. Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (DGMAUTO)]^C^C_DGMAUTO
+    [18. Πίνακας τμημάτων Αi και Δi (DGMTA)]^C^C_DGMTA
+    [19. Πίνακας αρχικών και τελικών εμβαδών (DGME)]^C^C_DGME
+    [20. Σκαριφήματα ΚΑΕΚ (DGMSKETCH)]^C^C_DGMSKETCH
+    [21. Τοποθέτηση ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
+    [22. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
+    [23. Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
+    [24. Υπογραφή PDF με JSignPdf (DGMSIGN)]^C^C_DGMSIGN
+    [<-25. ZIP αρχείων προς παράδοση (DGMZIP)]^C^C_DGMZIP
+  [->Β. ΔΓΜ για διόρθωση ορίων]
+    [1. Δημιουργία Layers (DGML)]^C^C_DGML
+    [2. (χειροκίνητα) Εισαγωγή αρχικών ΚΑΕΚ PST_KAEK + αριθμών]^C^C
+    [3. (προαιρετικά) Ορθοφωτοχάρτης αναφοράς (DGMORTHO)]^C^C_DGMORTHO
+    [4. Καθαρισμός σφαλμάτων (DGMCLEAN)]^C^C_DGMCLEAN
+    [5. (χειροκίνητα) Σχεδίαση ορθού ορίου στο TOPO_PROP]^C^C
+    [6. DGM_PROP_FINAL - BOUND_IMPL - BOUND_UNIMPL από TOPO_PROP (DGMCOPY)]^C^C_DGMCOPY
+    [7. VST_FINAL από LINE_XM_VST (DGMVST)]^C^C_DGMVST
+    [8. DGM_PROP_FINAL: Αυτόματα υπόλοιπα από PST_KAEK (DGMGM)]^C^C_DGMGM
+    [9. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
+    [10. Σχεδόν-συμπίπτουσες κορυφές (DGMNEAR)]^C^C_DGMNEAR
+    [11. Αρχή/φορά κλειστών polyline (DGMORIGIN)]^C^C_DGMORIGIN
+    [12. Αρίθμηση κορυφών + διαστάσεις (DGMK)]^C^C_DGMK
+    [13. Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (DGMAUTO)]^C^C_DGMAUTO
+    [14. Πίνακας για τη διόρθωση των γεωτεμαχίων (DGMT)]^C^C_DGMT
+    [15. Πίνακας αρχικών και τελικών εμβαδών (DGME)]^C^C_DGME
+    [16. Σκαριφήματα ΚΑΕΚ (DGMSKETCH)]^C^C_DGMSKETCH
+    [17. Τοποθέτηση ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
+    [18. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
+    [19. Hash SHA512 αρχείου DXF (DGMHASH)]^C^C_DGMHASH
+    [20. Υπογραφή PDF με JSignPdf (DGMSIGN)]^C^C_DGMSIGN
+    [<-<-21. ZIP αρχείων προς παράδοση (DGMZIP)]^C^C_DGMZIP
+[--]
 [1. Δημιουργία Layers (DGML)]^C^C_DGML
 [2. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
 [->3. Δημιουργία Πολυγώνων]
