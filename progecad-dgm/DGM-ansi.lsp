@@ -512,6 +512,18 @@
   '("TOPO_PROP_NEW" "DGM_PROP_FINAL" "LINE_XM" "LINE_XM_VST"
     "VST_FINAL" "EAS_FINAL" "MINE_FINAL")))
 
+;; Layers που εμπλέκονται στην αρίθμηση κορυφών ενός ΔΓΜ. Οι κορυφές τους
+;; αριθμούνται ΣΥΝΟΛΙΚΑ, ώστε ταυτιζόμενες κορυφές (αρχικό/τελικό/τμήματα)
+;; να παίρνουν ΕΝΑΝ κοινό αριθμό.
+(setq dgm:*lay-num*
+ '("TOPO_PROP" "PST_KAEK" "DGM_PROP_FINAL" "AREA_A" "AREA_D"))
+
+;; Ένωση λίστας ονομάτων σε συμβολοσειρά χωρισμένη με κόμματα (για φίλτρο ssget)
+(defun dgm:joincommas (lst / s)
+  (setq s "")
+  (foreach x lst (setq s (if (= s "") x (strcat s "," x))))
+  s)
+
 (defun dgm:asktype ( / typ)
   (princ "\nΤύπος διαγράμματος:")
   (princ "\n  1 = Τοπογραφικό Διάγραμμα")
@@ -565,8 +577,20 @@
 
 (defun c:DGMK ( / ss tol h n i e lay mlay a pts pt done f dd
                   cnt skipdup skipex dims dseen closed np k)
-  (princ "\nΕπιλέξτε polylines για αρίθμηση κορυφών: ")
+  (princ (strcat "\nΕπιλέξτε polylines για αρίθμηση κορυφών "
+                 "(ENTER = όλα τα layers ΔΓΜ: "
+                 (dgm:joincommas dgm:*lay-num*) "): "))
   (setq ss (ssget '((0 . "LWPOLYLINE"))))
+  ;; Χωρίς επιλογή -> όλες οι polylines των layers που εμπλέκονται στο ΔΓΜ,
+  ;; ώστε η αρίθμηση να γίνει ΣΥΝΟΛΙΚΑ (κοινές κορυφές = ένας αριθμός).
+  (if (null ss)
+    (progn
+      (setq ss (ssget "_X" (list '(0 . "LWPOLYLINE")
+                                 (cons 8 (dgm:joincommas dgm:*lay-num*)))))
+      (if ss
+        (princ (strcat "\nΕπιλέχθηκαν αυτόματα "
+                       (itoa (sslength ss))
+                       " polylines των layers ΔΓΜ.")))))
   (if ss
     (progn
       (setq h (dgm:getreal "\nΎψος κειμένου αρίθμησης" dgm:*h*))
@@ -2573,12 +2597,13 @@
 ;;; των layers PST_KAEK (αρχικά ΚΑΕΚ) και DGM_PROP_FINAL (τελικά ΚΑΕΚ):
 ;;; πίνακες συντεταγμένων, πίνακας αρχικών-τελικών εμβαδών, και πίνακας
 ;;; για τη διόρθωση των γεωτεμαχίων (από τα AREA_A/AREA_D αν υπάρχουν).
-(defun c:DGMAUTO ( / h tol maxr ins x y topol pstl dgml ents ktexts it pts
+(defun c:DGMAUTO ( / h tol maxr ins x y topol pstl dgml areal ents ktexts it pts
                      kaek title ht rows a1 a2 fmt tx heads wids labs pair lp
                      nm ip apo se cnt pp dp k)
   (setq topol (dgm:collect '("TOPO_PROP") T)
         pstl  (dgm:collect '("PST_KAEK") T)
-        dgml  (dgm:collect '("DGM_PROP_FINAL") T))
+        dgml  (dgm:collect '("DGM_PROP_FINAL") T)
+        areal (dgm:collect '("AREA_A" "AREA_D") T))
   (if (and (null pstl) (null topol))
     (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα στα layers PST_KAEK / TOPO_PROP. **")
     (progn
@@ -2590,10 +2615,12 @@
       (if ins
         (progn
           (setq x (car ins) y (cadr ins))
-          ;; 1. Αυτόματη αρίθμηση κορυφών (ιδιοκτησία, μετά αρχικά, μετά τελικά)
+          ;; 1. Αυτόματη αρίθμηση κορυφών (ιδιοκτησία, αρχικά, τελικά, τμήματα
+          ;;    Α/Δ) ΣΥΝΟΛΙΚΑ: κοινές κορυφές παίρνουν έναν αριθμό.
           (setq ents (append (mapcar 'car topol)
                              (mapcar 'car pstl)
-                             (mapcar 'car dgml)))
+                             (mapcar 'car dgml)
+                             (mapcar 'car areal)))
           (setq cnt (dgm:autonumber ents tol h))
           (princ (strcat "\nΑριθμήθηκαν " (itoa cnt) " νέες κορυφές σε "
                          (itoa (length ents)) " πολύγωνα."))
