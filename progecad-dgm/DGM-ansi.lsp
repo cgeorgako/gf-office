@@ -2994,13 +2994,54 @@
   (+ (* 2.4 h) (* 2.7 h) (* 2.0 h (length mrows))
      (if (dgm:closedp e) (* 2.0 h) 0.0)))
 
+;; Εμβαδόν επικάλυψης δύο πολυγώνων: (Ea + Eb - E(XOR)) / 2
+(defun dgm:ovarea (a b tol / sx)
+  (if (dgm:overlapp a b tol)
+    (progn
+      (setq sx 0.0)
+      (foreach l (dgm:xorloops (list a b) tol) (setq sx (+ sx (dgm:area l))))
+      (max 0.0 (/ (- (+ (dgm:area a) (dgm:area b)) sx) 2.0)))
+    0.0))
+
+;; Αντιστοίχιση αρχικών (PST_KAEK) με τελικά (DGM_PROP_FINAL) γεωτεμάχια.
+;; Σε κάθε αρχικό αντιστοιχούν τα τελικά που βρίσκονται κατά το μεγαλύτερο
+;; μέρος τους μέσα του (υπόλοιπα/τμήματα κατάτμησης)· αν δεν υπάρχει κανένα,
+;; το τελικό που καλύπτει πάνω από το μισό αρχικό (π.χ. το δικό μας όριο).
+;; Επιστρέφει (ζεύγη αταίριαστα): ζεύγη = ((pst-item (fin-item ...)) ...).
+(defun dgm:pairfinals (pstl dgml tol / pairs used lst best bo o rest)
+  (setq pairs nil used nil)
+  (foreach it pstl
+    (setq lst nil best nil bo 0.0)
+    (foreach g dgml
+      (setq o (dgm:ovarea (cadr it) (cadr g) tol))
+      (if (> o (* 0.5 (dgm:area (cadr g)))) (setq lst (cons g lst)))
+      (if (> o bo) (setq bo o best g)))
+    (if (and (null lst) best (> bo (* 0.5 (dgm:area (cadr it)))))
+      (setq lst (list best)))
+    (setq lst (reverse lst))
+    (foreach g lst (setq used (cons (car g) used)))
+    (setq pairs (cons (list it lst) pairs)))
+  (setq rest nil)
+  (foreach g dgml
+    (if (not (member (car g) used)) (setq rest (cons g rest))))
+  (list (reverse pairs) (reverse rest)))
+
+;; Τίτλος ΚΑΕΚ τελικού γεωτεμαχίου: το κείμενο μέσα του, αλλιώς (κανένα ή
+;; περισσότερα κείμενα) ο ΚΑΕΚ του αντίστοιχου αρχικού.
+(defun dgm:finkaek (g pk ktexts / kg)
+  (setq kg (dgm:kaekof (cadr g) ktexts))
+  (cond ((and kg (not (wcmatch kg "*/*"))) kg)
+        (pk pk)
+        (kg kg)
+        (t "ΑΓΝΩΣΤΟ")))
+
 ;;; DGMAUTO - Αυτόματη αρίθμηση + όλοι οι πίνακες για όλα τα πολύγωνα
 ;;; των layers PST_KAEK (αρχικά ΚΑΕΚ) και DGM_PROP_FINAL (τελικά ΚΑΕΚ):
 ;;; πίνακες συντεταγμένων, πίνακας αρχικών-τελικών εμβαδών, και πίνακας
 ;;; για τη διόρθωση των γεωτεμαχίων (από τα AREA_A/AREA_D αν υπάρχουν).
 (defun c:DGMAUTO ( / h tol maxr ins x y topol pstl dgml areal ents ktexts it pts
                      kaek title ht rows a1 a2 fmt tx heads wids labs pair lp
-                     nm ip apo se cnt pp dp k)
+                     nm ip apo se cnt pp dp k pr pairs pr2 ng xr yr g)
   (setq topol (dgm:collect '("TOPO_PROP") T)
         pstl  (dgm:collect '("PST_KAEK") T)
         dgml  (dgm:collect '("DGM_PROP_FINAL") T)
@@ -3036,47 +3077,60 @@
             (setq ht (dgm:coordtable (car it) title h maxr x y))
             (setq y (- y ht (* 4.0 h)))
             (setq k (1+ k)))
-          ;; 2β. Πίνακες αρχικών γεωτεμαχίων (PST_KAEK)
-          (foreach it pstl
-            (setq pts (cadr it)
-                  kaek (dgm:kaekof pts ktexts))
+          ;; 2β. ΔΥΟ ΣΤΗΛΕΣ: αριστερά ο πίνακας κάθε αρχικού ΚΑΕΚ (PST_KAEK),
+          ;;     δεξιά ο πίνακας του αντίστοιχου ΚΑΕΚ μετά τη μεταβολή
+          (princ "\nΑντιστοίχιση αρχικών - τελικών γεωτεμαχίων...")
+          (setq pr (dgm:pairfinals pstl dgml tol)
+                pairs (car pr))
+          (setq ng 1)
+          (foreach it (append topol pstl)
+            (setq ng (max ng (1+ (/ (length (cadr it)) maxr)))))
+          (setq xr (+ x (* ng 57.0 h) (* 6.0 h)))
+          (foreach pr2 pairs
+            (setq it (car pr2)
+                  kaek (dgm:kaekof (cadr it) ktexts))
             (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ ΑΡΧΙΚΟΥ ΓΕΩΤΕΜΑΧΙΟΥ ΜΕ ΚΑΕΚ "
                                 (if kaek kaek "ΑΓΝΩΣΤΟ")))
             (setq ht (dgm:coordtable (car it) title h maxr x y))
-            (setq y (- y ht (* 4.0 h))))
-          (foreach it dgml
-            (setq pts (cadr it)
-                  kaek (dgm:kaekof pts ktexts))
+            (setq yr y)
+            (foreach g (cadr pr2)
+              (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ ΤΕΛΙΚΟΥ ΓΕΩΤΕΜΑΧΙΟΥ ΜΕ ΚΑΕΚ "
+                                  (dgm:finkaek g kaek ktexts)
+                                  " ΓΙΑ ΤΗΝ ΕΝΗΜΕΡΩΣΗ ΤΗΣ ΚΤΗΜΑΤΟΛΟΓΙΚΗΣ ΒΑΣΗΣ"))
+              (setq yr (- yr (dgm:coordtable (car g) title h maxr xr yr)
+                          (* 4.0 h))))
+            (setq y (min (- y ht (* 4.0 h)) yr)))
+          ;; τελικά χωρίς αντίστοιχο αρχικό (δεξιά στήλη)
+          (setq yr y)
+          (foreach g (cadr pr)
             (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ ΤΕΛΙΚΟΥ ΓΕΩΤΕΜΑΧΙΟΥ ΜΕ ΚΑΕΚ "
-                                (if kaek kaek "ΑΓΝΩΣΤΟ")
+                                (dgm:finkaek g nil ktexts)
                                 " ΓΙΑ ΤΗΝ ΕΝΗΜΕΡΩΣΗ ΤΗΣ ΚΤΗΜΑΤΟΛΟΓΙΚΗΣ ΒΑΣΗΣ"))
-            (setq ht (dgm:coordtable (car it) title h maxr x y))
-            (setq y (- y ht (* 4.0 h))))
-          ;; 3. Πίνακας αρχικών και τελικών εμβαδών (ανά κείμενο ΚΑΕΚ/ΝΕΟ)
+            (setq yr (- yr (dgm:coordtable (car g) title h maxr xr yr)
+                        (* 4.0 h))))
+          (setq y (min y yr))
+          ;; 3. Πίνακας αρχικών και τελικών εμβαδών (ανά αρχικό ΚΑΕΚ με τελικό
+          ;;    όριο, και ανά κείμενο ΝΕΟ)
           (setq rows nil)
+          (foreach pr2 pairs
+            (if (cadr pr2)
+              (progn
+                (setq kaek (dgm:kaekof (cadr (car pr2)) ktexts) a2 0.0)
+                (foreach g (cadr pr2) (setq a2 (+ a2 (dgm:area (cadr g)))))
+                (setq rows (cons (list (if kaek kaek "ΑΓΝΩΣΤΟ")
+                                       (rtos (dgm:area (cadr (car pr2))) 2 2)
+                                       (rtos a2 2 2))
+                                 rows)))))
           (foreach tx ktexts
-            (setq fmt (dgm:kaekfmt (cdr tx)))
-            (cond
-              ((eq 'KAEK fmt)
-               (setq a1 nil a2 nil)
-               (foreach pp pstl
-                 (if (dgm:inpoly (car tx) (cadr pp))
-                   (setq a1 (+ (if a1 a1 0.0) (dgm:area (cadr pp))))))
-               (foreach dp dgml
-                 (if (dgm:inpoly (car tx) (cadr dp))
-                   (setq a2 (+ (if a2 a2 0.0) (dgm:area (cadr dp))))))
-               (setq rows (cons (list (cdr tx)
-                                      (if a1 (rtos a1 2 2) "-")
-                                      (if a2 (rtos a2 2 2) "-"))
-                                rows)))
-              ((eq 'NEO fmt)
-               (setq a2 nil)
-               (foreach dp dgml
-                 (if (dgm:inpoly (car tx) (cadr dp))
-                   (setq a2 (+ (if a2 a2 0.0) (dgm:area (cadr dp))))))
-               (setq rows (cons (list (cdr tx) "-"
-                                      (if a2 (rtos a2 2 2) "-"))
-                                rows)))))
+            (if (eq 'NEO (dgm:kaekfmt (cdr tx)))
+              (progn
+                (setq a2 nil)
+                (foreach dp dgml
+                  (if (dgm:inpoly (car tx) (cadr dp))
+                    (setq a2 (+ (if a2 a2 0.0) (dgm:area (cadr dp))))))
+                (setq rows (cons (list (cdr tx) "-"
+                                       (if a2 (rtos a2 2 2) "-"))
+                                 rows)))))
           (setq rows (reverse rows))
           (if rows
             (progn
@@ -3106,9 +3160,15 @@
               (foreach pp pstl
                 (if (and (null apo) ip (dgm:inpoly ip (cadr pp)))
                   (setq apo (dgm:kaekof (cadr pp) ktexts))))
+              ;; ΣΕ ΚΑΕΚ: ο ΚΑΕΚ του αρχικού που αντιστοιχεί στο τελικό
+              ;; γεωτεμάχιο το οποίο περιέχει το τμήμα
               (foreach dp dgml
                 (if (and (null se) ip (dgm:inpoly ip (cadr dp)))
-                  (setq se (dgm:kaekof (cadr dp) ktexts))))
+                  (progn
+                    (foreach pr2 pairs
+                      (if (and (null se) (member dp (cadr pr2)))
+                        (setq se (dgm:kaekof (cadr (car pr2)) ktexts))))
+                    (if (null se) (setq se (dgm:kaekof (cadr dp) ktexts))))))
               (setq rows (cons (list (if nm nm "-")
                                      (rtos (dgm:area pts) 2 2)
                                      (if apo apo "-")
