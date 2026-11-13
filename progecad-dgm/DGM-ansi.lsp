@@ -2120,13 +2120,29 @@
 (defun dgm:strictin (p pts tol)
   (and (dgm:inpoly p pts) (not (dgm:onboundary p pts tol))))
 
-;; Αληθές αν τα πολύγωνα a και b επικαλύπτονται (όχι απλή επαφή ορίων)
-(defun dgm:overlapp (a b tol / ip r)
-  (setq ip (dgm:innerpt a) r nil)
-  (if (and ip (dgm:inpoly ip b)) (setq r T))
-  (if (not r) (foreach q a (if (dgm:strictin q b tol) (setq r T))))
-  (if (not r) (foreach q b (if (dgm:strictin q a tol) (setq r T))))
+;; Αληθές αν κάποια κορυφή ή μέσο πλευράς του a είναι αυστηρά μέσα στο b
+(defun dgm:anyin (a b tol / r n i p1 p2)
+  (setq r nil n (length a) i 0)
+  (while (and (< i n) (not r))
+    (setq p1 (nth i a) p2 (nth (rem (1+ i) n) a))
+    (if (or (dgm:strictin p1 b tol)
+            (dgm:strictin (list (/ (+ (car p1) (car p2)) 2.0)
+                                (/ (+ (cadr p1) (cadr p2)) 2.0))
+                          b tol))
+      (setq r T))
+    (setq i (1+ i)))
   r)
+
+;; Αληθές αν τα πολύγωνα a και b επικαλύπτονται (όχι απλή επαφή ορίων).
+;; Ελέγχονται εσωτερικά σημεία, κορυφές ΚΑΙ μέσα πλευρών και των δύο, ώστε
+;; να πιάνεται και η περίπτωση όπου το ένα κόβει το άλλο με χορδή (όλες οι
+;; κορυφές πάνω στα περιγράμματα, καμία αυστηρά στο εσωτερικό).
+(defun dgm:overlapp (a b tol / ia ib)
+  (setq ia (dgm:innerpt a) ib (dgm:innerpt b))
+  (or (and ia (dgm:inpoly ia b))
+      (and ib (dgm:inpoly ib a))
+      (dgm:anyin a b tol)
+      (dgm:anyin b a tol)))
 
 ;; Διαχωρισμός αποκοπτόμενου τμήματος a ανά όμορο ΚΑΕΚ: όπου το κοινό όριο
 ;; δύο ομόρων συναντά το τμήμα, αυτό κόβεται προς το πλησιέστερο σημείο του
@@ -2292,6 +2308,11 @@
               (princ "\n[ΠΡΟΣΟΧΗ] Αποτυχία συνένωσης αποκοπτόμενου τμήματος με τον όμορο - ελέγξτε χειροκίνητα.")))))
       (dgm:layer-std "DGM_PROP_FINAL")
       (foreach it items
+        (if (and (caddr it) (> (length (cadr it)) 1))
+          (princ (strcat "\n[ΠΡΟΣΟΧΗ] Το ΚΑΕΚ "
+                         (if (cadddr it) (cadddr it) "(χωρίς κείμενο)")
+                         " χωρίζεται σε " (itoa (length (cadr it)))
+                         " τμήματα από το τελικό μας όριο - ελέγξτε.")))
         (if (caddr it)
           (foreach pc (cadr it)
             (dgm:mkpoly pc "DGM_PROP_FINAL" T)
