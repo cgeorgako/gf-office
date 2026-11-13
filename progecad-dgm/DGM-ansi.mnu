@@ -71,7 +71,7 @@
   [Πολύγωνο από σημείο - μόνο PST_KAEK και DGM_PROP_FINAL (DGMBNDPD)]^C^C_DGMBNDPD
   [--]
   [DGM_PROP_FINAL: Κατάτμηση PST_KAEK με LINE_XM (DGMKAT)]^C^C_DGMKAT
-  [DGM_PROP_FINAL: Αυτόματα υπόλοιπα από PST_KAEK (DGMGM)]^C^C_DGMGM
+  [DGM_PROP_FINAL επηρεαζόμενων ομόρων - ως προς το δικό μας (DGMGM)]^C^C_DGMGM
   [VST_FINAL από LINE_XM_VST (DGMVST)]^C^C_DGMVST
   [--]
   [Κατάτμηση πολυγώνου με γραμμή κοπής (DGMSPLIT)]^C^C_DGMSPLIT

@@ -437,8 +437,29 @@
   (setq n (max 1 (strlen str)))
   (min h (/ (* 0.95 w) (* 0.8 n))))
 
+;; Τίτλος πίνακα: αν δεν χωρά σε μία γραμμή με το κανονικό ύψος, χωρίζεται
+;; σε δύο γραμμές στο κενό που είναι πλησιέστερα στη μέση (αντί να μικραίνει).
+(defun dgm:title2 (title tot h / n i best bd d)
+  (if (<= (* 0.8 (strlen title) h) (* 0.95 tot))
+    (list title)
+    (progn
+      (setq n (strlen title) i 1 best nil bd 1e9)
+      (while (<= i n)
+        (if (= (substr title i 1) " ")
+          (progn
+            (setq d (abs (- i (/ n 2))))
+            (if (< d bd) (setq bd d best i))))
+        (setq i (1+ i)))
+      (if best
+        (list (substr title 1 (1- best)) (substr title (1+ best)))
+        (list title)))))
+
+;; Ύψος της ζώνης τίτλου (μία ή δύο γραμμές)
+(defun dgm:titleh (title tot h)
+  (if (> (length (dgm:title2 title tot h)) 1) (* 4.2 h) (* 2.4 h)))
+
 (defun dgm:table (ins title heads wids rows h lay footer
-                  / tot x0 y0 th hh nhl y x i k w col row s ht yy)
+                  / tot x0 y0 th hh nhl y x i k w col row s ht yy tl tth)
   (setq tot (apply '+ wids)
         x0  (car ins)
         y0  (cadr ins)
@@ -447,10 +468,18 @@
   ;; Τίτλος
   (if (and title (/= title ""))
     (progn
-      (dgm:rect x0 (- y (* 2.4 h)) (+ x0 tot) y lay)
-      (dgm:textc (list (+ x0 (/ tot 2.0)) (- y (* 1.2 h)))
-                 (dgm:fit-h title tot h) title lay)
-      (setq y (- y (* 2.4 h)))))
+      (setq tl (dgm:title2 title tot h)
+            tth (dgm:titleh title tot h))
+      (dgm:rect x0 (- y tth) (+ x0 tot) y lay)
+      (if (> (length tl) 1)
+        (progn
+          (dgm:textc (list (+ x0 (/ tot 2.0)) (- y (* 1.2 h)))
+                     (dgm:fit-h (car tl) tot h) (car tl) lay)
+          (dgm:textc (list (+ x0 (/ tot 2.0)) (- y (* 3.0 h)))
+                     (dgm:fit-h (cadr tl) tot h) (cadr tl) lay))
+        (dgm:textc (list (+ x0 (/ tot 2.0)) (- y (* 1.2 h)))
+                   (dgm:fit-h title tot h) title lay))
+      (setq y (- y tth))))
   ;; Επικεφαλίδες
   (setq nhl (apply 'max (mapcar 'length heads)))
   (setq hh (* h (+ 1.2 (* 1.5 nhl))))
@@ -2041,60 +2070,24 @@
   (dgm:katcore '("PST_KAEK" "DGM_PROP_FINAL") "LINE_XM_VST" "VST_FINAL" tol)
   (princ))
 
-;;; DGMGM - Αυτόματη συμπλήρωση DGM_PROP_FINAL από PST_KAEK (KTM_ComputeDgmFromPst)
-(defun c:DGMGM ( / tol pst dgmp texts loops loop has best bl len d cnt mrg
-                  ss i dd merged)
-  (setq tol (dgm:getreal "\nΑνοχή (m)" 0.001))
-  (setq pst nil)
-  (foreach it (dgm:collect '("PST_KAEK") nil)
-    (if (caddr it) (setq pst (cons (cadr it) pst))))
-  (setq dgmp nil)
-  (foreach it (dgm:collect '("DGM_PROP_FINAL") nil)
-    (if (caddr it) (setq dgmp (cons (cons (car it) (cadr it)) dgmp))))
-  (setq texts nil)
-  (setq ss (ssget "_X" '((0 . "TEXT,MTEXT") (8 . "PST_KAEK"))))
-  (if ss
-    (progn
-      (setq i 0)
-      (while (< i (sslength ss))
-        (setq dd (entget (ssname ss i)))
-        (setq texts (cons (list (cadr (assoc 10 dd)) (caddr (assoc 10 dd)))
-                          texts))
-        (setq i (1+ i)))))
+;;; DGMGM - Τελικά όρια (DGM_PROP_FINAL) των επηρεαζόμενων ομόρων PST_KAEK,
+;;; ως προς το δικό μας γεωτεμάχιο (DGMOUR). Από κάθε όμορο αφαιρούνται τα
+;;; διεκδικούμενα τμήματα και του προστίθενται τα αποκοπτόμενα.
+(defun c:DGMGM ( / our n)
+  (setq our (dgm:our))
+  (if (null our)
+    (if (dgm:pick-our) (setq our (dgm:our))))
   (cond
-    ((null pst) (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα PST_KAEK. **"))
-    ((null dgmp) (princ "\n** Δεν υπάρχουν κλειστά πολύγωνα DGM_PROP_FINAL. **"))
+    ((null our)
+     (princ "\n** Δεν ορίστηκε το δικό μας γεωτεμάχιο (DGMOUR). **"))
+    ((> (length (dgm:collect '("DGM_PROP_FINAL") T)) 1)
+     (princ "\n** Υπάρχουν ήδη και άλλα DGM_PROP_FINAL εκτός του δικού μας - σβήστε τα για επαναδημιουργία. **"))
     (t
-     (setq loops (dgm:xorloops (append pst (mapcar 'cdr dgmp)) tol))
-     (dgm:layer-std "DGM_PROP_FINAL")
-     (setq cnt 0 mrg 0)
-     (foreach loop loops
-       (setq has nil)
-       (foreach tx texts
-         (if (dgm:inpoly tx loop) (setq has T)))
-       (if has
-         (progn
-           (dgm:mkpoly loop "DGM_PROP_FINAL" T)
-           (setq cnt (1+ cnt)))
-         (progn
-           (setq best nil bl 0.0)
-           (foreach d dgmp
-             (setq len (dgm:sharedlen loop (cdr d) tol))
-             (if (> len bl) (setq bl len best d)))
-           (if best
-             (progn
-               (setq merged (dgm:xorloops (list loop (cdr best)) tol))
-               (if (= 1 (length merged))
-                 (progn
-                   (entdel (car best))
-                   (dgm:mkpoly (car merged) "DGM_PROP_FINAL" T)
-                   (setq dgmp (subst (cons (entlast) (car merged)) best dgmp))
-                   (setq mrg (1+ mrg)))
-                 (princ "\n[ΠΡΟΣΟΧΗ] Αποτυχία αυτόματης συνένωσης υπολοίπου - ελέγξτε χειροκίνητα.")))
-             (princ "\n[ΠΡΟΣΟΧΗ] Υπόλοιπο χωρίς ΚΑΕΚ και χωρίς όμορο DGM_PROP_FINAL.")))))
-     (princ (strcat "\nΔημιουργήθηκαν " (itoa cnt)
-                    " νέα πολύγωνα DGM_PROP_FINAL και " (itoa mrg)
-                    " υπόλοιπα συνενώθηκαν με όμορα."))))
+     (setq n (dgm:geo-core (cadr (cadr our)) (cadr (car our))
+                           (dgm:otherpst (car (cadr our)))
+                           0.001 dgm:*h* 0.01 nil T))
+     (princ (strcat "\nΔημιουργήθηκαν " (itoa (caddr n))
+                    " πολύγωνα DGM_PROP_FINAL επηρεαζόμενων ομόρων."))))
   (princ))
 
 ;;; DGMAREAS - Αυτόματη δημιουργία AREA_A/AREA_D (KTM_CreateAreas)
@@ -2111,6 +2104,42 @@
         (setq a (abs (dgm:area (cadr it))))
         (if (or (null best) (< a ba)) (setq best it ba a)))))
   best)
+
+;; Θέση ετικέτας πολυγώνου: το εσωτερικό σημείο που απέχει περισσότερο από
+;; το περίγραμμα (κεντροειδές + κάναβος 9x9 στο περιβάλλον ορθογώνιο), ώστε
+;; το κείμενο να μην πέφτει πάνω στις γραμμές. Επιστρέφει (σημείο . απόσταση).
+(defun dgm:labelpt (pts / x0 x1 y0 y1 best bd c q d i j)
+  (setq x0 (apply 'min (mapcar 'car pts))  x1 (apply 'max (mapcar 'car pts))
+        y0 (apply 'min (mapcar 'cadr pts)) y1 (apply 'max (mapcar 'cadr pts))
+        best nil bd -1.0)
+  (setq c (dgm:centroid pts))
+  (if (and c (dgm:inpoly c pts))
+    (setq best c bd (dgm:pmindist c pts)))
+  (setq i 1)
+  (while (< i 10)
+    (setq j 1)
+    (while (< j 10)
+      (setq q (list (+ x0 (* (- x1 x0) (/ i 10.0)))
+                    (+ y0 (* (- y1 y0) (/ j 10.0)))))
+      (if (dgm:inpoly q pts)
+        (progn
+          (setq d (dgm:pmindist q pts))
+          (if (> d bd) (setq bd d best q))))
+      (setq j (1+ j)))
+    (setq i (1+ i)))
+  (if (null best)
+    (progn (setq best (dgm:innerpt pts))
+           (setq bd (if best (dgm:pmindist best pts) 0.0))))
+  (if best (cons best bd)))
+
+;; Ετικέτα τμήματος στο "κέντρο" του πολυγώνου· σε στενά τμήματα το ύψος του
+;; κειμένου μειώνεται (έως το μισό) ώστε να χωρά καλύτερα.
+(defun dgm:arealabel (pts h nm lay / lp lh)
+  (setq lp (dgm:labelpt pts))
+  (if lp
+    (progn
+      (setq lh (max (* 0.5 h) (min h (* 1.5 (cdr lp)))))
+      (dgm:textc (car lp) lh nm lay))))
 
 ;; Πλησιέστερο σημείο του τμήματος a-b προς το σημείο p
 (defun dgm:segnear (p a b / dx dy l2 tp)
@@ -2281,15 +2310,15 @@
       (setq na (1+ (dgm:countlabels "AREA_A-labels"))
             nd (1+ (dgm:countlabels "AREA_D-labels")))
       (foreach a aparts
-        (setq nm (strcat "ΤΜΗΜΑ Α" (itoa na)) na (1+ na) ip (dgm:innerpt a))
+        (setq nm (strcat "ΤΜΗΜΑ Α" (itoa na)) na (1+ na))
         (dgm:mkpoly a "AREA_A" T)
-        (if ip (dgm:textc ip h nm "AREA_A-labels"))
+        (dgm:arealabel a h nm "AREA_A-labels")
         (princ (strcat "\n    " nm " (αποκοπτόμενο): "
                        (rtos (dgm:area a) 2 2) " τ.μ.")))
       (foreach d dfin
-        (setq nm (strcat "ΤΜΗΜΑ Δ" (itoa nd)) nd (1+ nd) ip (dgm:innerpt d))
+        (setq nm (strcat "ΤΜΗΜΑ Δ" (itoa nd)) nd (1+ nd))
         (dgm:mkpoly d "AREA_D" T)
-        (if ip (dgm:textc ip h nm "AREA_D-labels"))
+        (dgm:arealabel d h nm "AREA_D-labels")
         (princ (strcat "\n    " nm " (διεκδικούμενο): "
                        (rtos (dgm:area d) 2 2) " τ.μ.")))))
   ;; 5. τελικά όρια επηρεαζόμενων ομόρων
@@ -2494,7 +2523,7 @@
       (princ "\nΕπόμενα βήματα: DGMC (έλεγχος) και DGMAUTO (αρίθμηση + πίνακες).")))
   (princ))
 
-(defun dgm:geo-praksi ( / gm nx nd)
+(defun dgm:geo-praksi ( / gm nx nd fl)
   (princ "\nΑντιγραφή και των αμετάβλητων ΚΑΕΚ στο DGM_PROP_FINAL;  1 = Ναι   0 = Όχι")
   (setq gm (dgm:getint "\nΕπιλογή" 0))
   (princ "\n[1] Καθαρισμός...")
@@ -2512,8 +2541,15 @@
      (princ "\n[2] Δεν υπάρχουν γραμμές κατάτμησης στο LINE_XM. Για συνένωση: DGMUNION.")))
   (if (and (= gm 1) (> (length (dgm:collect '("DGM_PROP_FINAL") T)) 0))
     (progn
-      (princ "\n[3] Υπόλοιπα (αμετάβλητα) ΚΑΕΚ...")
-      (dgm:callauto "DGMGM")))
+      (princ "\n[3] Αμετάβλητα ΚΑΕΚ:")
+      (setq nx 0 fl (dgm:collect '("DGM_PROP_FINAL") T))
+      (foreach it (dgm:collect '("PST_KAEK") T)
+        (setq nd nil)
+        (foreach g fl
+          (if (dgm:overlapp (cadr it) (cadr g) 0.001) (setq nd T)))
+        (if (not nd)
+          (progn (dgm:mkpoly (cadr it) "DGM_PROP_FINAL" T) (setq nx (1+ nx)))))
+      (princ (strcat " αντιγράφηκαν " (itoa nx) " στο DGM_PROP_FINAL."))))
   (dgm:callauto "DGMCLEAN")
   (princ "\n[4] Έλεγχος ορθότητας:")
   (dgm:callauto "DGMC")
@@ -2991,7 +3027,7 @@
                (strcat "Ε (" (dgm:perimstr nums T) ") = "
                        (rtos (dgm:area pts) 2 2) " τ.μ.")
                nil))
-  (+ (* 2.4 h) (* 2.7 h) (* 2.0 h (length mrows))
+  (+ (dgm:titleh title (* ng 57.0 h) h) (* 2.7 h) (* 2.0 h (length mrows))
      (if (dgm:closedp e) (* 2.0 h) 0.0)))
 
 ;; Εμβαδόν επικάλυψης δύο πολυγώνων: (Ea + Eb - E(XOR)) / 2
@@ -4041,7 +4077,7 @@
   (princ "\n  DGMBND    Πολύγωνο από εσωτερικό σημείο")
   (princ "\n  DGMBNDPD  Πολύγωνο από σημείο (μόνο PST_KAEK/DGM_PROP_FINAL)")
   (princ "\n  DGMKAT    DGM_PROP_FINAL: κατάτμηση PST_KAEK με LINE_XM")
-  (princ "\n  DGMGM     DGM_PROP_FINAL: αυτόματα υπόλοιπα από PST_KAEK")
+  (princ "\n  DGMGM     DGM_PROP_FINAL των επηρεαζόμενων ομόρων (ως προς το δικό μας, DGMOUR)")
   (princ "\n  DGMVST    VST_FINAL από LINE_XM_VST")
   (princ "\n  DGMAREAS  Αυτόματη δημιουργία AREA_A / AREA_D")
   (princ "\n  DGMSKETCH Σκαρίφημα Αρχικών (καφέ) / Τελικών (μπλε) ΚΑΕΚ, solid hatch")
