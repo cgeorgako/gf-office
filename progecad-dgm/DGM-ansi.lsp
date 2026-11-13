@@ -207,20 +207,31 @@
 
 ;;; ------------------------- Βοηθητικές: είσοδος ------------------------
 
+;; Όταν dgm:*auto* = T (σύνθετες εντολές ροής, π.χ. DGMGEO) οι ερωτήσεις με
+;; προεπιλογή απαντώνται σιωπηλά με την προεπιλεγμένη τιμή.
 (defun dgm:getreal (msg def / v)
-  (setq v (getreal (strcat msg " <" (rtos def 2 2) ">: ")))
-  (if v v def))
+  (if dgm:*auto*
+    def
+    (progn
+      (setq v (getreal (strcat msg " <" (rtos def 2 2) ">: ")))
+      (if v v def))))
 
 (defun dgm:getint (msg def / v)
-  (setq v (getint (strcat msg " <" (itoa def) ">: ")))
-  (if v v def))
+  (if dgm:*auto*
+    def
+    (progn
+      (setq v (getint (strcat msg " <" (itoa def) ">: ")))
+      (if v v def))))
 
 (defun dgm:getstr (msg def / v)
-  (setq v (getstring T
-            (strcat msg
-                    (if (and def (/= def "")) (strcat " <" def ">") "")
-                    ": ")))
-  (if (= v "") def v))
+  (if dgm:*auto*
+    def
+    (progn
+      (setq v (getstring T
+                (strcat msg
+                        (if (and def (/= def "")) (strcat " <" def ">") "")
+                        ": ")))
+      (if (= v "") def v))))
 
 (defun dgm:sel-poly (msg / en)
   (setq en (entsel msg))
@@ -2083,59 +2094,215 @@
   (setq ss (ssget "_X" (list '(0 . "TEXT,MTEXT") (cons 8 lay))))
   (if ss (sslength ss) 0))
 
-(defun c:DGMAREAS ( / tol h minw e1 e2 p d loops loop ip inp ind na nd w nm ar)
-  (setq e1 (dgm:sel-poly "\nΕπιλέξτε το πολύγωνο PST_KAEK της ιδιοκτησίας: "))
-  (setq e2 (if e1 (dgm:sel-poly "\nΕπιλέξτε το πολύγωνο DGM_PROP_FINAL της ιδιοκτησίας: ")))
+;; Το μικρότερο κλειστό πολύγωνο των layers lays που περιέχει το σημείο pt.
+;; Επιστρέφει (ename pts closed) ή nil.
+(defun dgm:polyat (pt lays / best ba a)
+  (foreach it (dgm:collect lays T)
+    (if (dgm:inpoly pt (cadr it))
+      (progn
+        (setq a (abs (dgm:area (cadr it))))
+        (if (or (null best) (< a ba)) (setq best it ba a)))))
+  best)
+
+;; Πυρήνας: τμήματα Α (αποκοπτόμενα) / Δ (διεκδικούμενα) του ΔΙΚΟΥ ΜΑΣ
+;; γεωτεμαχίου. p = αρχικό όριο (PST_KAEK), d = τελικό όριο (DGM_PROP_FINAL).
+;; Επιστρέφει το πλήθος των τμημάτων που δημιουργήθηκαν.
+(defun dgm:areas-core (p d tol h minw / loops loop ip inp ind na nd w nm ar cnt)
+  (setq loops (dgm:xorloops (list p d) tol) cnt 0)
+  (dgm:layer-std "AREA_A")
+  (dgm:layer-std "AREA_D")
+  (dgm:layer-std "AREA_A-labels")
+  (dgm:layer-std "AREA_D-labels")
+  (setq na (1+ (dgm:countlabels "AREA_A-labels"))
+        nd (1+ (dgm:countlabels "AREA_D-labels")))
+  (foreach loop loops
+    (setq ar (dgm:area loop)
+          w (if (> (dgm:perim loop) 1e-9)
+              (/ (* 2.0 ar) (dgm:perim loop))
+              0.0))
+    (if (< w minw)
+      (princ (strcat "\n[INFO] Παραλείφθηκε τμήμα με πλάτος "
+                     (rtos w 2 3) " m (όριο " (rtos minw 2 3) " m)."))
+      (progn
+        (setq ip (dgm:innerpt loop))
+        (setq inp (and ip (dgm:inpoly ip p))
+              ind (and ip (dgm:inpoly ip d)))
+        (cond
+          ((and inp (not ind))
+           (setq nm (strcat "ΤΜΗΜΑ Α" (itoa na)) na (1+ na) cnt (1+ cnt))
+           (dgm:mkpoly loop "AREA_A" T)
+           (if ip (dgm:textc ip h nm "AREA_A-labels"))
+           (princ (strcat "\n" nm " (αποκοπτόμενο): "
+                          (rtos ar 2 2) " τ.μ.")))
+          ((and ind (not inp))
+           (setq nm (strcat "ΤΜΗΜΑ Δ" (itoa nd)) nd (1+ nd) cnt (1+ cnt))
+           (dgm:mkpoly loop "AREA_D" T)
+           (if ip (dgm:textc ip h nm "AREA_D-labels"))
+           (princ (strcat "\n" nm " (διεκδικούμενο): "
+                          (rtos ar 2 2) " τ.μ.")))
+          ((and inp ind)
+           (princ (strcat "\n[INFO] Κοινό τμήμα (εντός και των δύο): "
+                          (rtos ar 2 2) " τ.μ. - παραλείπεται.")))
+          (t
+           (princ "\n[ΠΡΟΣΟΧΗ] Τμήμα με ασαφή χαρακτηρισμό - τοποθετήθηκε στο DGM_CHECK.")
+           (dgm:layer "DGM_CHECK" 1)
+           (dgm:mkpoly loop "DGM_CHECK" T))))))
+  cnt)
+
+;; Η εντολή ρωτά ΠΡΩΤΑ ποιο γεωτεμάχιο είναι το δικό μας (σημείο στο εσωτερικό
+;; του) και μετά καθορίζει τα AREA_A / AREA_D ως προς αυτό.
+(defun c:DGMAREAS ( / pt it tol h minw e1 e2 kaek)
+  (setq pt (getpoint (strcat "\nΔείξτε σημείο ΜΕΣΑ στο ΔΙΚΟ ΜΑΣ γεωτεμάχιο "
+                             "(Enter = επιλογή των πολυγώνων): ")))
+  (if pt
+    (progn
+      (setq pt (list (car pt) (cadr pt)))
+      (if (setq it (dgm:polyat pt '("PST_KAEK"))) (setq e1 (car it)))
+      (if (setq it (dgm:polyat pt '("DGM_PROP_FINAL"))) (setq e2 (car it)))))
+  (if (null e1)
+    (setq e1 (dgm:sel-poly "\nΕπιλέξτε το πολύγωνο PST_KAEK του δικού μας γεωτεμαχίου: ")))
+  (if (and e1 (null e2))
+    (setq e2 (dgm:sel-poly "\nΕπιλέξτε το πολύγωνο DGM_PROP_FINAL του δικού μας γεωτεμαχίου: ")))
   (if (and e1 e2)
     (if (or (not (dgm:closedp e1)) (not (dgm:closedp e2)))
       (princ "\n** Και τα δύο πολύγωνα πρέπει να είναι κλειστά. **")
       (progn
+        (setq kaek (dgm:kaekof (dgm:lwpts e1) (dgm:kaektexts)))
+        (princ (strcat "\nΔικό μας γεωτεμάχιο: ΚΑΕΚ " (if kaek kaek "(χωρίς κείμενο ΚΑΕΚ)")))
         (setq tol (dgm:getreal "\nΑνοχή (m)" 0.001))
         (setq h (dgm:getreal "\nΎψος χαρακτήρων ετικετών" dgm:*h*))
         (setq dgm:*h* h)
         (setq minw (dgm:getreal "\nΔιαγραφή πολυγώνων με πλάτος <" 0.01))
-        (setq p (dgm:lwpts e1)
-              d (dgm:lwpts e2))
-        (setq loops (dgm:xorloops (list p d) tol))
-        (dgm:layer-std "AREA_A")
-        (dgm:layer-std "AREA_D")
-        (dgm:layer-std "AREA_A-labels")
-        (dgm:layer-std "AREA_D-labels")
-        (setq na (1+ (dgm:countlabels "AREA_A-labels"))
-              nd (1+ (dgm:countlabels "AREA_D-labels")))
-        (foreach loop loops
-          (setq ar (dgm:area loop)
-                w (if (> (dgm:perim loop) 1e-9)
-                    (/ (* 2.0 ar) (dgm:perim loop))
-                    0.0))
-          (if (< w minw)
-            (princ (strcat "\n[INFO] Παραλείφθηκε τμήμα με πλάτος "
-                           (rtos w 2 3) " m (όριο " (rtos minw 2 3) " m)."))
-            (progn
-              (setq ip (dgm:innerpt loop))
-              (setq inp (and ip (dgm:inpoly ip p))
-                    ind (and ip (dgm:inpoly ip d)))
-              (cond
-                ((and inp (not ind))
-                 (setq nm (strcat "ΤΜΗΜΑ Α" (itoa na)) na (1+ na))
-                 (dgm:mkpoly loop "AREA_A" T)
-                 (if ip (dgm:textc ip h nm "AREA_A-labels"))
-                 (princ (strcat "\n" nm " (αποκοπτόμενο): "
-                                (rtos ar 2 2) " τ.μ.")))
-                ((and ind (not inp))
-                 (setq nm (strcat "ΤΜΗΜΑ Δ" (itoa nd)) nd (1+ nd))
-                 (dgm:mkpoly loop "AREA_D" T)
-                 (if ip (dgm:textc ip h nm "AREA_D-labels"))
-                 (princ (strcat "\n" nm " (διεκδικούμενο): "
-                                (rtos ar 2 2) " τ.μ.")))
-                ((and inp ind)
-                 (princ (strcat "\n[INFO] Κοινό τμήμα (εντός και των δύο): "
-                                (rtos ar 2 2) " τ.μ. - παραλείπεται.")))
-                (t
-                 (princ "\n[ΠΡΟΣΟΧΗ] Τμήμα με ασαφή χαρακτηρισμό - τοποθετήθηκε στο DGM_CHECK.")
-                 (dgm:layer "DGM_CHECK" 1)
-                 (dgm:mkpoly loop "DGM_CHECK" T))))))
+        (dgm:areas-core (dgm:lwpts e1) (dgm:lwpts e2) tol h minw)
         (princ "\nΟλοκληρώθηκε η δημιουργία AREA_A/AREA_D."))))
+  (princ))
+
+;;; DGMGEO - Ολόκληρη η γεωμετρία του ΔΓΜ σε ΕΝΑ βήμα.
+;;; Διόρθωση ορίων: ρωτά ποιο είναι το δικό μας γεωτεμάχιο, αντιγράφει το
+;;; TOPO_PROP στο DGM_PROP_FINAL (+ όρια BOUND), καθαρίζει, δημιουργεί
+;;; AREA_A/AREA_D, τα υπόλοιπα των ομόρων και εκτελεί τον έλεγχο ορθότητας.
+;;; Πράξη: καθαρισμός, κατάτμηση PST_KAEK με LINE_XM, έλεγχος ορθότητας.
+
+;; Εκτέλεση άλλης εντολής DGM μέσα από σύνθετη εντολή (χωρίς νέα ομάδα UNDO)
+(defun dgm:call (nm / f)
+  (setq f (eval (read (strcat "DGM:ORIG-" nm))))
+  (if (null f) (setq f (eval (read (strcat "C:" nm)))))
+  (if f (apply f nil)))
+
+;; Το ίδιο, με σιωπηλή αποδοχή όλων των προεπιλεγμένων απαντήσεων
+(defun dgm:callauto (nm)
+  (setq dgm:*auto* T)
+  (dgm:call nm)
+  (setq dgm:*auto* nil))
+
+(defun dgm:plcount (flt / ss)
+  (setq ss (ssget "_X" (list '(0 . "LWPOLYLINE") (cons 8 flt))))
+  (if ss (sslength ss) 0))
+
+(defun dgm:geo-dior (h / pt fin topo pst kaek bnd)
+  (setq pt (getpoint "\nΔείξτε σημείο ΜΕΣΑ στο ΔΙΚΟ ΜΑΣ γεωτεμάχιο: "))
+  (if (null pt)
+    (princ "\n** Ακυρώθηκε. **")
+    (progn
+      (setq pt (list (car pt) (cadr pt)))
+      (setq fin (dgm:polyat pt '("DGM_PROP_FINAL"))
+            topo (dgm:polyat pt '("TOPO_PROP"))
+            pst (dgm:polyat pt '("PST_KAEK")))
+      (cond
+        ((and (null fin) (null topo))
+         (princ "\n** Το σημείο δεν είναι μέσα σε κλειστό πολύγωνο TOPO_PROP ή DGM_PROP_FINAL. **"))
+        ((null pst)
+         (princ "\n** Το σημείο δεν είναι μέσα σε κλειστό πολύγωνο PST_KAEK. **"))
+        (t
+         (setq kaek (dgm:kaekof (cadr pst) (dgm:kaektexts)))
+         (princ (strcat "\nΔικό μας γεωτεμάχιο: ΚΑΕΚ "
+                        (if kaek kaek "(χωρίς κείμενο ΚΑΕΚ)")
+                        ", αρχικό εμβαδόν "
+                        (rtos (abs (dgm:area (cadr pst))) 2 2) " τ.μ."))
+         ;; όρια ιδιοκτησίας (μόνο αν δεν έχουν ήδη σχεδιαστεί)
+         (setq bnd 0)
+         (if (= 0 (dgm:plcount "BOUND_IMPL,BOUND_UNIMPL"))
+           (progn
+             (princ "\nΌρια ιδιοκτησίας:  1 = Υλοποιημένα (BOUND_IMPL)   2 = Μη υλοποιημένα (BOUND_UNIMPL)   0 = Παράλειψη")
+             (setq bnd (dgm:getint "\nΕπιλογή" 1))))
+         ;; 1. τελικό όριο του δικού μας γεωτεμαχίου
+         (if fin
+           (princ "\n[1] Υπάρχει ήδη DGM_PROP_FINAL για το γεωτεμάχιό μας - διατηρείται.")
+           (progn
+             (dgm:layer-std "DGM_PROP_FINAL")
+             (dgm:mkpoly (cadr topo) "DGM_PROP_FINAL" T)
+             (princ "\n[1] Το TOPO_PROP αντιγράφηκε στο DGM_PROP_FINAL.")))
+         (if (or (= bnd 1) (= bnd 2))
+           (progn
+             (dgm:layer-std (if (= bnd 2) "BOUND_UNIMPL" "BOUND_IMPL"))
+             (dgm:mkpoly (cadr (if topo topo fin))
+                         (if (= bnd 2) "BOUND_UNIMPL" "BOUND_IMPL") T)
+             (princ (strcat "\n    Όρια στο layer "
+                            (if (= bnd 2) "BOUND_UNIMPL" "BOUND_IMPL") "."))))
+         ;; 2. καθαρισμός (κούμπωμα κορυφών PST_KAEK / DGM_PROP_FINAL)
+         (princ "\n[2] Καθαρισμός...")
+         (dgm:callauto "DGMCLEAN")
+         (setq fin (dgm:polyat pt '("DGM_PROP_FINAL"))
+               pst (dgm:polyat pt '("PST_KAEK")))
+         (if (or (null fin) (null pst))
+           (princ "\n** Μετά τον καθαρισμό δεν εντοπίστηκε το γεωτεμάχιό μας - ελέγξτε τα πολύγωνα. **")
+           (progn
+             ;; 3. τμήματα Α / Δ ως προς το δικό μας γεωτεμάχιο
+             (if (> (dgm:plcount "AREA_A,AREA_D") 0)
+               (princ "\n[3] Υπάρχουν ήδη πολύγωνα AREA_A/AREA_D - δεν ξαναδημιουργήθηκαν.")
+               (progn
+                 (princ "\n[3] Τμήματα Α (αποκοπτόμενα) / Δ (διεκδικούμενα):")
+                 (dgm:areas-core (cadr pst) (cadr fin) 0.001 h 0.01)))
+             ;; 4. τελικά όρια των ομόρων (υπόλοιπα)
+             (if (= 1 (length (dgm:collect '("DGM_PROP_FINAL") T)))
+               (progn
+                 (princ "\n[4] Τελικά όρια ομόρων γεωτεμαχίων...")
+                 (dgm:callauto "DGMGM"))
+               (princ "\n[4] Υπάρχουν ήδη περισσότερα DGM_PROP_FINAL - τα υπόλοιπα ομόρων δεν ξαναδημιουργήθηκαν."))
+             (dgm:callauto "DGMCLEAN")
+             ;; 5. έλεγχος ορθότητας
+             (princ "\n[5] Έλεγχος ορθότητας:")
+             (dgm:callauto "DGMC")
+             (princ "\nΕπόμενο βήμα: DGMAUTO (αρίθμηση κορυφών + όλοι οι πίνακες).")))))))
+  (princ))
+
+(defun dgm:geo-praksi ( / gm nx nd)
+  (princ "\nΑντιγραφή και των αμετάβλητων ΚΑΕΚ στο DGM_PROP_FINAL;  1 = Ναι   0 = Όχι")
+  (setq gm (dgm:getint "\nΕπιλογή" 0))
+  (princ "\n[1] Καθαρισμός...")
+  (dgm:callauto "DGMCLEAN")
+  (setq nx (length (dgm:collect '("LINE_XM") nil))
+        nd (length (dgm:collect '("DGM_PROP_FINAL") T)))
+  (cond
+    ((> nd 0)
+     (princ "\n[2] Υπάρχουν ήδη πολύγωνα DGM_PROP_FINAL - η κατάτμηση δεν επαναλήφθηκε."))
+    ((> nx 0)
+     (princ "\n[2] Κατάτμηση PST_KAEK με τις γραμμές LINE_XM:")
+     (dgm:katcore '("PST_KAEK") "LINE_XM" "DGM_PROP_FINAL" 0.001)
+     (princ "\n    Υπενθύμιση: τοποθετήστε κείμενα ΝΕΟ ... (layer PST_KAEK) στα νέα πολύγωνα."))
+    (t
+     (princ "\n[2] Δεν υπάρχουν γραμμές κατάτμησης στο LINE_XM. Για συνένωση: DGMUNION.")))
+  (if (and (= gm 1) (> (length (dgm:collect '("DGM_PROP_FINAL") T)) 0))
+    (progn
+      (princ "\n[3] Υπόλοιπα (αμετάβλητα) ΚΑΕΚ...")
+      (dgm:callauto "DGMGM")))
+  (dgm:callauto "DGMCLEAN")
+  (princ "\n[4] Έλεγχος ορθότητας:")
+  (dgm:callauto "DGMC")
+  (princ "\nΕπόμενο βήμα: DGMAUTO (αρίθμηση κορυφών + όλοι οι πίνακες).")
+  (princ))
+
+(defun c:DGMGEO ( / typ h)
+  (princ "\nΓεωμετρία ΔΓΜ σε ένα βήμα:  2 = Διόρθωση ορίων   3 = Πράξη (κατάτμηση)")
+  (setq typ (dgm:getint "\nΕπιλογή" (if (= dgm:*typ* 3) 3 2)))
+  (if (/= typ 3) (setq typ 2))
+  (setq dgm:*typ* typ)
+  (if (= typ 3)
+    (dgm:geo-praksi)
+    (progn
+      (setq h (dgm:getreal "\nΎψος χαρακτήρων ετικετών τμημάτων" dgm:*h*))
+      (setq dgm:*h* h)
+      (dgm:geo-dior h)))
   (princ))
 
 ;;; DGMCOPY - Αντιγραφή γραμμών TOPO_PROP σε άλλα layers
@@ -2313,43 +2480,49 @@
 ;;; (αποκοπτόμενα Αi) και AREA_D (διεκδικούμενα Δi). Τίτλος ανά τμήμα με
 ;;; το όνομά του (από AREA_x-labels) και τον ΚΑΕΚ του γεωτεμαχίου PST_KAEK
 ;;; μέσα στο οποίο βρίσκεται. Οι πίνακες στοιβάζονται αυτόματα.
-(defun c:DGMTA ( / h maxr ins x y ktexts pstl pair kind lablay labs it e pts
-                   ip nm kaek pp title ht cnt tx)
+;; Πυρήνας: πίνακες συντεταγμένων των τμημάτων Αi/Δi από τη θέση (x y)
+;; προς τα κάτω. Επιστρέφει (πλήθος νέο-y).
+(defun dgm:ta-core (h maxr x y / ktexts pstl pair kind lablay labs it e pts
+                      ip nm kaek pp title ht cnt tx)
+  (setq cnt 0)
+  (dgm:marks-load)
+  (setq ktexts (dgm:kaektexts)
+        pstl (dgm:collect '("PST_KAEK") T))
+  (dgm:layer-std "pinakas_sintetagmenon")
+  (foreach pair (list (list "AREA_A" "ΑΠΟΚΟΠΤΟΜΕΝΟΥ" "AREA_A-labels")
+                      (list "AREA_D" "ΔΙΕΚΔΙΚΟΥΜΕΝΟΥ" "AREA_D-labels"))
+    (setq kind (cadr pair) lablay (caddr pair))
+    (setq labs (dgm:laytexts lablay))
+    (foreach it (dgm:collect (list (car pair)) T)
+      (setq e (car it) pts (cadr it) ip (dgm:innerpt pts))
+      ;; όνομα τμήματος από την ετικέτα (χωρίς το πρόθεμα "ΤΜΗΜΑ ")
+      (setq nm nil)
+      (foreach tx labs
+        (if (and (null nm) (dgm:inpoly (car tx) pts))
+          (setq nm (dgm:stripprefix (cdr tx) "ΤΜΗΜΑ "))))
+      ;; ΚΑΕΚ του γεωτεμαχίου PST_KAEK που περιέχει το τμήμα
+      (setq kaek nil)
+      (foreach pp pstl
+        (if (and (null kaek) ip (dgm:inpoly ip (cadr pp)))
+          (setq kaek (dgm:kaekof (cadr pp) ktexts))))
+      (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ " kind
+                          " ΤΜΗΜΑΤΟΣ " (if nm nm "?")
+                          " ΑΠΟ ΚΑΕΚ " (if kaek kaek "?")))
+      (setq ht (dgm:coordtable e title h maxr x y))
+      (setq y (- y ht (* 4.0 h)))
+      (setq cnt (1+ cnt))))
+  (list cnt y))
+
+(defun c:DGMTA ( / h maxr ins r)
   (setq h (dgm:getreal "\nΎψος κειμένου πινάκων" dgm:*h*))
   (setq dgm:*h* h)
   (setq maxr (dgm:getint "\nΜέγιστες γραμμές ανά ομάδα στηλών" 30))
   (setq ins (getpoint "\nΣημείο εισαγωγής πινάκων (πάνω αριστερή γωνία): "))
   (if ins
     (progn
-      (setq x (car ins) y (cadr ins) cnt 0)
-      (dgm:marks-load)
-      (setq ktexts (dgm:kaektexts)
-            pstl (dgm:collect '("PST_KAEK") T))
-      (dgm:layer-std "pinakas_sintetagmenon")
-      (foreach pair (list (list "AREA_A" "ΑΠΟΚΟΠΤΟΜΕΝΟΥ" "AREA_A-labels")
-                          (list "AREA_D" "ΔΙΕΚΔΙΚΟΥΜΕΝΟΥ" "AREA_D-labels"))
-        (setq kind (cadr pair) lablay (caddr pair))
-        (setq labs (dgm:laytexts lablay))
-        (foreach it (dgm:collect (list (car pair)) T)
-          (setq e (car it) pts (cadr it) ip (dgm:innerpt pts))
-          ;; όνομα τμήματος από την ετικέτα (χωρίς το πρόθεμα "ΤΜΗΜΑ ")
-          (setq nm nil)
-          (foreach tx labs
-            (if (and (null nm) (dgm:inpoly (car tx) pts))
-              (setq nm (dgm:stripprefix (cdr tx) "ΤΜΗΜΑ "))))
-          ;; ΚΑΕΚ του γεωτεμαχίου PST_KAEK που περιέχει το τμήμα
-          (setq kaek nil)
-          (foreach pp pstl
-            (if (and (null kaek) ip (dgm:inpoly ip (cadr pp)))
-              (setq kaek (dgm:kaekof (cadr pp) ktexts))))
-          (setq title (strcat "ΠΙΝΑΚΑΣ ΣΥΝΤΕΤΑΓΜΕΝΩΝ ΚΟΡΥΦΩΝ " kind
-                              " ΤΜΗΜΑΤΟΣ " (if nm nm "?")
-                              " ΑΠΟ ΚΑΕΚ " (if kaek kaek "?")))
-          (setq ht (dgm:coordtable e title h maxr x y))
-          (setq y (- y ht (* 4.0 h)))
-          (setq cnt (1+ cnt))))
-      (if (> cnt 0)
-        (princ (strcat "\nΔημιουργήθηκαν " (itoa cnt)
+      (setq r (dgm:ta-core h maxr (car ins) (cadr ins)))
+      (if (> (car r) 0)
+        (princ (strcat "\nΔημιουργήθηκαν " (itoa (car r))
                        " πίνακες τμημάτων Αi/Δi."))
         (princ "\n** Δεν βρέθηκαν πολύγωνα στα layers AREA_A/AREA_D. **"))))
   (princ))
@@ -2723,8 +2896,13 @@
                     wids (list (* 10 h) (* 14 h) (* 18 h) (* 18 h)))
               (dgm:table (list x y)
                          "ΠΙΝΑΚΑΣ ΓΙΑ ΤΗ ΔΙΟΡΘΩΣΗ ΤΩΝ ΓΕΩΤΕΜΑΧΙΩΝ"
-                         heads wids rows h "pinakas_sintetagmenon" nil))
-            (princ "\n[INFO] Δεν υπάρχουν πολύγωνα AREA_A/AREA_D - ο πίνακας διόρθωσης παραλείφθηκε."))
+                         heads wids rows h "pinakas_sintetagmenon" nil)
+              (setq y (- y (* 2.4 h) (* 5.7 h) (* 2.0 h (length rows))
+                         (* 4.0 h)))
+              ;; 5. Πίνακες συντεταγμένων των τμημάτων Αi / Δi
+              (setq pp (dgm:ta-core h maxr x y))
+              (princ (strcat "\nΠίνακες τμημάτων Αi/Δi: " (itoa (car pp)) ".")))
+            (princ "\n[INFO] Δεν υπάρχουν πολύγωνα AREA_A/AREA_D - οι πίνακες διόρθωσης και τμημάτων παραλείφθηκαν."))
           (princ (strcat "\nΟλοκληρώθηκε: πίνακες για "
                          (itoa (length topol)) " ιδιοκτησίες (TOPO_PROP), "
                          (itoa (length pstl)) " αρχικά και "
@@ -3568,6 +3746,8 @@
   (princ "\n  DGMCLEAN  Αυτόματος καθαρισμός τυπικών σφαλμάτων")
   (princ "\n  DGMC      Έλεγχος ορθότητας σχεδίου")
   (princ "\n  DGMNEAR   Σχεδόν-συμπίπτουσες κορυφές ΔΓΜ (ζώνη 0.0004-0.005 m)")
+  (princ "\nΣύντομη ροή ΔΓΜ:  DGML -> σχεδίαση -> DGMGEO -> DGMAUTO -> παράδοση")
+  (princ "\n  DGMGEO    Γεωμετρία ΔΓΜ σε ένα βήμα (ρωτά ποιο είναι το δικό μας γεωτεμάχιο)")
   (princ "\nΠολύγωνα:")
   (princ "\n  DGMBND    Πολύγωνο από εσωτερικό σημείο")
   (princ "\n  DGMBNDPD  Πολύγωνο από σημείο (μόνο PST_KAEK/DGM_PROP_FINAL)")
@@ -3587,7 +3767,7 @@
   (princ "\n  DGMP      Πίνακας συντεταγμένων κορυφών (μία polyline)")
   (princ "\n  DGMPALL   Πίνακες για όλες τις polylines αυτόματα (layer + ΚΑΕΚ)")
   (princ "\n  DGMTA     Πίνακες τμημάτων Αi (AREA_A) και Δi (AREA_D)")
-  (princ "\n  DGMAUTO   Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (TOPO_PROP + PST_KAEK + DGM_PROP_FINAL)")
+  (princ "\n  DGMAUTO   Αρίθμηση + ΟΛΟΙ οι πίνακες αυτόματα (συντεταγμένων, εμβαδών, διόρθωσης, Αi/Δi)")
   (princ "\nΣημείωση: κάθε εντολή αναιρείται συνολικά με ένα U/UNDO.")
   (princ "\n  DGME      Πίνακας αρχικών/τελικών εμβαδών")
   (princ "\n  DGMT      Πίνακας για τη διόρθωση των γεωτεμαχίων")
@@ -3607,12 +3787,14 @@
 
 (defun dgm:runwrapped (osym / *error*)
   (defun *error* (msg)
+    (setq dgm:*auto* nil)
     (command "_.UNDO" "_E")
     (if (and msg
              (/= msg "Function cancelled")
              (/= msg "quit / exit abort"))
       (princ (strcat "\nΣφάλμα: " msg)))
     (princ))
+  (setq dgm:*auto* nil)
   (command "_.UNDO" "_BE")
   (apply (eval osym) nil)
   (command "_.UNDO" "_E")
@@ -3629,7 +3811,7 @@
 
 (foreach dgm:tmp '("DGML" "DGMK" "DGMP" "DGMPALL" "DGMTA" "DGMNEAR" "DGMAUTO" "DGME" "DGMT"
                    "DGMA" "DGMKAEK" "DGMKHD" "DGMC" "DGMCLEAN" "DGMORIGIN"
-                   "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS"
+                   "DGMBND" "DGMBNDPD" "DGMKAT" "DGMVST" "DGMGM" "DGMAREAS" "DGMGEO"
                    "DGMCOPY" "DGMSPLIT" "DGMUNION" "DGMCUT" "DGMGRID"
                    "DGMSHEET" "DGMORTHO" "DGMORTHOCAP" "DGMSKETCH" "DGMPREP")
   (dgm:wrapcmd dgm:tmp))
