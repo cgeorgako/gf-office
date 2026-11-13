@@ -52,15 +52,17 @@
     [<-(αν χρειαστεί) Συνένωση όμορων πολυγώνων (DGMUNION)]^C^C_DGMUNION
   [->Β. ΔΓΜ για διόρθωση ορίων]
     [1. Δημιουργία Layers (DGML)]^C^C_DGML
-    [2. (χειροκίνητα) PST_KAEK + κείμενα ΚΑΕΚ, ορθό όριο στο TOPO_PROP]^C^C
-    [3. ΓΕΩΜΕΤΡΙΑ σε ένα βήμα: δικό μας γεωτεμάχιο, DGM_PROP_FINAL, AREA_A-AREA_D, όμοροι, έλεγχος (DGMGEO)]^C^C_DGMGEO
-    [4. ΑΡΙΘΜΗΣΗ + ΟΛΟΙ οι πίνακες (DGMAUTO)]^C^C_DGMAUTO
-    [5. Σκαριφήματα ΚΑΕΚ (DGMSKETCH)]^C^C_DGMSKETCH
-    [6. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
-    [7. ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
-    [8. Hash SHA512 του DXF (DGMHASH)]^C^C_DGMHASH
-    [9. Υπογραφή PDF (DGMSIGN)]^C^C_DGMSIGN
-    [<-<-10. ZIP παράδοσης (DGMZIP)]^C^C_DGMZIP
+    [2. (χειροκίνητα) PST_KAEK + κείμενα ΚΑΕΚ, TOPO_PROP, DGM_PROP_FINAL του δικού μας]^C^C
+    [3. Επιλογή polyline δικού μας DGM_PROP_FINAL (DGMOUR)]^C^C_DGMOUR
+    [4. ΓΕΩΜΕΤΡΙΑ σε ένα βήμα: DGM_PROP_FINAL επηρεαζόμενων ομόρων + AREA_A-AREA_D (DGMGEO)]^C^C_DGMGEO
+    [5. Έλεγχος ορθότητας σχεδίου (DGMC)]^C^C_DGMC
+    [6. ΑΡΙΘΜΗΣΗ + ΟΛΟΙ οι πίνακες (DGMAUTO)]^C^C_DGMAUTO
+    [7. Σκαριφήματα ΚΑΕΚ (DGMSKETCH)]^C^C_DGMSKETCH
+    [8. Προετοιμασία σχεδίου για υποβολή (DGMPREP)]^C^C_DGMPREP
+    [9. ΚΗΔ στο σχέδιο (DGMKHD)]^C^C_DGMKHD
+    [10. Hash SHA512 του DXF (DGMHASH)]^C^C_DGMHASH
+    [11. Υπογραφή PDF (DGMSIGN)]^C^C_DGMSIGN
+    [<-<-12. ZIP παράδοσης (DGMZIP)]^C^C_DGMZIP
 [--]
 [1. Δημιουργία Layers (DGML)]^C^C_DGML
 [2. Καθαρισμός τυπικών σφαλμάτων - Cleanup (DGMCLEAN)]^C^C_DGMCLEAN
