@@ -556,6 +556,14 @@
                  (itoa (length lst)) " τυποποιημένα για τον τύπο αυτόν)."))
   (princ))
 
+;; Ταύτιση κορυφών για την αρίθμηση: δύο κορυφές θεωρούνται ΙΔΙΑ κορυφή
+;; (ένας αριθμός) όταν οι συντεταγμένες τους Χ και Υ διαφέρουν έως και tol
+;; (π.χ. 0.001 m, συμπεριλαμβανομένου του ορίου - καλύπτει στρογγυλοποίηση
+;; στο τρίτο δεκαδικό και στους δύο άξονες).
+(defun dgm:samept (a b tol)
+  (and (<= (abs (- (car a) (car b))) (+ tol 1e-6))
+       (<= (abs (- (cadr a) (cadr b))) (+ tol 1e-6))))
+
 ;;; DGMK - Μαζική αρίθμηση κορυφών σε μία ή περισσότερες polylines.
 ;;; Κορυφές που ταυτίζονται (εντός ανοχής) παίρνουν ΕΝΑΝ αριθμό, και
 ;;; κορυφές με υπάρχον σημάδι από παλαιότερη αρίθμηση δεν ξανααριθμούνται.
@@ -624,7 +632,7 @@
           (setq pt (nth k pts))
           (setq f nil)
           (foreach dd done
-            (if (< (distance dd pt) tol) (setq f T)))
+            (if (dgm:samept dd pt tol) (setq f T)))
           (cond
             ;; κοινή κορυφή - αριθμήθηκε ήδη σε αυτή την εκτέλεση
             (f (setq skipdup (1+ skipdup)))
@@ -2908,7 +2916,7 @@
       (setq pt (nth k pts))
       (setq f nil)
       (foreach dd done
-        (if (< (distance dd pt) tol) (setq f T)))
+        (if (dgm:samept dd pt tol) (setq f T)))
       (cond
         (f nil)
         ((dgm:findnum pt dgm:*findtol*)
