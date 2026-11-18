@@ -321,22 +321,57 @@
         (setq i (1+ i)))))
   segs)
 
-;; Αρχικοποίηση αποφυγής: τμήματα + ήδη υπάρχουσες ετικέτες σημείων
-(defun dgm:avoid-init (ss / ssm i d ip)
+;; "Ακτίνα" δίσκου που καλύπτει ένα κείμενο ύψους hh με str χαρακτήρες.
+;; Επιλεγμένη ώστε ένας διψήφιος αριθμός να χωρά στο offset 1.0 χωρίς να
+;; ακουμπά τον κύκλο κορυφής (ακτίνα 0.4)· μεγαλύτεροι αριθμοί μετακινούνται.
+(defun dgm:txtr (hh str) (+ (* 0.3 hh (strlen str)) (* 0.4 hh)))
+
+;; Αρχικοποίηση αποφυγής επικάλυψης:
+;;  dgm:*segs*  = τμήματα polylines/lines (κανένα text πάνω σε polyline)
+;;  dgm:*circs* = όλοι οι κύκλοι του σχεδίου + οι κύκλοι κορυφών που θα
+;;                σχεδιαστούν στις επιλεγμένες polylines (κανένα text πάνω σε circle)
+;;  dgm:*placed* = όλα τα υπάρχοντα κείμενα ως δίσκοι (κανένα text πάνω σε text)
+(defun dgm:avoid-init (ss / ssm ssc i d ip s hh e p j jj)
   (setq dgm:*segs* (dgm:gathersegs ss))
+  ;; --- κύκλοι ---
+  (setq dgm:*circs* nil)
+  (setq ssc (ssget "_X" '((0 . "CIRCLE"))))
+  (if ssc
+    (progn (setq i 0)
+      (while (< i (sslength ssc))
+        (setq d (entget (ssname ssc i)) ip (cdr (assoc 10 d)))
+        (setq dgm:*circs*
+              (cons (list (car ip) (cadr ip) (cdr (assoc 40 d))) dgm:*circs*))
+        (setq i (1+ i)))))
+  ;; οι κύκλοι κορυφών (υπάρχοντες ή όχι) των επιλεγμένων polylines
+  (setq i 0)
+  (while (< i (sslength ss))
+    (setq e (ssname ss i))
+    (foreach p (dgm:lwpts e)
+      (setq dgm:*circs*
+            (cons (list (car p) (cadr p) dgm:*vcirc*) dgm:*circs*)))
+    (setq i (1+ i)))
+  ;; --- υπάρχοντα κείμενα ---
   (setq dgm:*placed* nil)
-  (setq ssm (ssget "_X" '((0 . "TEXT") (8 . "σημείο_*"))))
+  (setq ssm (ssget "_X" '((0 . "TEXT,MTEXT"))))
   (if ssm
     (progn (setq i 0)
       (while (< i (sslength ssm))
-        (setq d (entget (ssname ssm i)) ip (cdr (assoc 10 d)))
-        (if (dgm:intp (cdr (assoc 1 d)))
-          (setq dgm:*placed* (cons (list (car ip) (cadr ip) 0.5) dgm:*placed*)))
+        (setq d (entget (ssname ssm i))
+              s (cdr (assoc 1 d)) hh (cdr (assoc 40 d))
+              j (cdr (assoc 72 d)) jj (cdr (assoc 73 d)))
+        ;; θέση: σημείο στοίχισης (11) όταν το κείμενο είναι στοιχισμένο
+        (setq ip (if (and (assoc 11 d)
+                          (or (and j (/= j 0)) (and jj (/= jj 0))))
+                   (cdr (assoc 11 d)) (cdr (assoc 10 d))))
+        (if (and ip s hh (> hh 0.0))
+          (setq dgm:*placed*
+                (cons (list (car ip) (cadr ip) (dgm:txtr hh s)) dgm:*placed*)))
         (setq i (1+ i))))))
 
 ;; Ελεύθερη θέση ετικέτας ακτίνας R στο κέντρο c (χωρίς επικάλυψη με
-;; τοποθετημένες ετικέτες ή τμήματα)
-(defun dgm:boxfree (c r / ok pl s)
+;; άλλα κείμενα, τμήματα polylines ή κύκλους)
+(defun dgm:boxfree (c r / ok pl s cc)
   (setq ok T)
   (foreach pl dgm:*placed*
     (if (< (distance (list (car pl) (cadr pl)) c) (+ r (caddr pl)))
@@ -344,6 +379,10 @@
   (if ok
     (foreach s dgm:*segs*
       (if (< (dgm:pseg c (car s) (cadr s)) r) (setq ok nil))))
+  (if ok
+    (foreach cc dgm:*circs*
+      (if (< (distance (list (car cc) (cadr cc)) c) (+ r (caddr cc)))
+        (setq ok nil))))
   ok)
 
 ;; Κατεύθυνση "προς τα έξω" στην κορυφή idx (rad)
@@ -369,22 +408,27 @@
 ;; Τοποθέτηση αριθμού κορυφής μετατοπισμένου (dgm:*voff*) περιμετρικά, σε
 ;; θέση χωρίς επικάλυψη. Η ΑΚΡΙΒΗΣ κορυφή αποθηκεύεται ως XDATA (1010) ώστε
 ;; η αναζήτηση να παραμένει ακριβής ανεξάρτητα από τη μετατόπιση.
-(defun dgm:placelabel (v pts closed idx h str lay / d r a0 angs da a pos found)
-  (setq d dgm:*voff*
-        r (+ (* 0.35 h (strlen str)) (* 0.6 h))
+(defun dgm:placelabel (v pts closed idx h str lay / d r a0 angs da a pos found dmax)
+  (setq r  (dgm:txtr h str)
         a0 (dgm:outdir v pts closed idx))
   (if (and closed
-           (dgm:inpoly (list (+ (car v) (* d (cos a0))) (+ (cadr v) (* d (sin a0)))) pts))
+           (dgm:inpoly (list (+ (car v) (* dgm:*voff* (cos a0)))
+                             (+ (cadr v) (* dgm:*voff* (sin a0)))) pts))
     (setq a0 (+ a0 pi)))
   (setq angs '(0.0 0.698 -0.698 1.396 -1.396 2.094 -2.094 3.14159) found nil)
-  (foreach da angs
-    (if (not found)
-      (progn
-        (setq a (+ a0 da)
-              pos (list (+ (car v) (* d (cos a))) (+ (cadr v) (* d (sin a)))))
-        (if (dgm:boxfree pos r) (setq found pos)))))
+  ;; δοκιμή σε δακτυλίους ακτίνας d, με βήμα 0.5 m προς τα έξω, ώσπου να
+  ;; βρεθεί θέση όπου το κείμενο δεν πέφτει πάνω σε άλλο text/polyline/circle
+  (setq d dgm:*voff* dmax (+ dgm:*voff* 4.0))
+  (while (and (null found) (<= d (+ dmax 1e-6)))
+    (foreach da angs
+      (if (not found)
+        (progn
+          (setq a (+ a0 da)
+                pos (list (+ (car v) (* d (cos a))) (+ (cadr v) (* d (sin a)))))
+          (if (dgm:boxfree pos r) (setq found pos)))))
+    (setq d (+ d 0.5)))
   (if (null found)
-    (setq found (list (+ (car v) (* d (cos a0))) (+ (cadr v) (* d (sin a0))))))
+    (setq found (list (+ (car v) (* dmax (cos a0))) (+ (cadr v) (* dmax (sin a0))))))
   (regapp "GFDGM")
   (entmake (list '(0 . "TEXT") (cons 8 lay)
                  (cons 10 (list (car found) (cadr found) 0.0))
