@@ -1690,49 +1690,68 @@
     (setq i (1+ i)))
   out)
 
-;;; DGMHASH - Υπολογισμός hash SHA512 αρχείου DXF μέσω certutil
-(defun c:DGMHASH ( / dxf algname tmp cmd ok sh f line hash pt h)
-  (setq dxf (getfiled "Επιλογή αρχείου DXF" "" "dxf" 0))
-  (if dxf
+;; SHA512 ενός αρχείου μέσω certutil. Επιστρέφει το hash (128 hex) ή nil.
+(defun dgm:filehash (fn / tmp cmd ok sh f line hash)
+  (setq tmp (strcat (getenv "TEMP") "\\dgm_hash.txt")
+        cmd (strcat "cmd /c certutil -hashfile \"" fn "\" SHA512 > \"" tmp "\"")
+        ok  nil)
+  (if vl-load-com (vl-load-com))
+  (if vlax-create-object
     (progn
-      (setq algname "SHA512")
-      (setq tmp (strcat (getenv "TEMP") "\\dgm_hash.txt"))
-      (setq cmd (strcat "cmd /c certutil -hashfile \"" dxf "\" " algname
-                        " > \"" tmp "\""))
-      (setq ok nil)
-      (if vl-load-com (vl-load-com))
-      (if vlax-create-object
+      (setq sh (vlax-create-object "WScript.Shell"))
+      (if sh
         (progn
-          (setq sh (vlax-create-object "WScript.Shell"))
-          (if sh
-            (progn
-              (vlax-invoke-method sh 'Run cmd 0 :vlax-true)
-              (vlax-release-object sh)
-              (setq ok T)))))
-      (if (not ok)
+          (vlax-invoke-method sh 'Run cmd 0 :vlax-true)
+          (vlax-release-object sh)
+          (setq ok T)))))
+  (if (not ok)
+    (progn
+      (startapp cmd)
+      (getstring "\nΟ υπολογισμός τρέχει σε παράθυρο cmd. Πατήστε Enter όταν ολοκληρωθεί... ")))
+  (setq f (open tmp "r"))
+  (if f
+    (progn
+      (read-line f)                          ; γραμμή τίτλου certutil
+      (setq line (read-line f))              ; γραμμή με το hash
+      (close f)
+      (if line (setq hash (dgm:nospace line)))))
+  hash)
+
+;; Εμφάνιση hash + προαιρετική τοποθέτηση κειμένου στο σχέδιο
+(defun dgm:hash-report (fn hash / pt h)
+  (if (and hash (= 128 (strlen hash)))
+    (progn
+      (princ (strcat "\nSHA512 (" fn "):\n" hash))
+      (princ "\n(Το ίδιο κλειδί κατακερματισμού υποβάλλεται στο Κτηματολόγιο.")
+      (princ "\n Μην αποθηκεύσετε ξανά το DXF μετά την τοποθέτηση, γιατί αλλάζει το hash.)")
+      (setq pt (getpoint "\nΘέση κειμένου hash στο σχέδιο (Enter για παράλειψη): "))
+      (if pt
         (progn
-          (startapp cmd)
-          (getstring "\nΟ υπολογισμός τρέχει σε παράθυρο cmd. Πατήστε Enter όταν ολοκληρωθεί... ")))
-      ;; ανάγνωση αποτελέσματος
-      (setq hash nil)
-      (setq f (open tmp "r"))
-      (if f
-        (progn
-          (read-line f)                      ; γραμμή τίτλου certutil
-          (setq line (read-line f))          ; γραμμή με το hash
-          (close f)
-          (if line (setq hash (dgm:nospace line)))))
-      (if (and hash (= 128 (strlen hash)))
-        (progn
-          (princ (strcat "\n" algname ": " hash))
-          (setq pt (getpoint "\nΘέση κειμένου hash στο σχέδιο (Enter για παράλειψη): "))
-          (if pt
-            (progn
-              (setq h (dgm:getreal "\nΎψος κειμένου" dgm:*h*))
-              (setq dgm:*h* h)
-              (dgm:text pt h (strcat algname " DXF: " hash)
-                        (getvar "CLAYER")))))
-        (princ "\n** Δεν ήταν δυνατή η ανάγνωση του hash. Δοκιμάστε το tools/dxf-hash.cmd εκτός CAD. **"))))
+          (setq h (dgm:getreal "\nΎψος κειμένου" dgm:*h*))
+          (setq dgm:*h* h)
+          (dgm:text pt h (strcat "SHA512 DXF: " hash) (getvar "CLAYER")))))
+    (princ "\n** Δεν ήταν δυνατή η ανάγνωση του hash. Δοκιμάστε το tools/dxf-hash.cmd εκτός CAD. **")))
+
+;;; DGMHASH - SHA512 του ΤΡΕΧΟΝΤΟΣ αρχείου:
+;;;  - αν το σχέδιο είναι .dxf  -> αποθήκευση (QSAVE) και hash του ίδιου αρχείου
+;;;  - αν το σχέδιο είναι .dwg  -> εκτέλεση SAVEAS (για αποθήκευση ως DXF)
+(defun c:DGMHASH ( / nm dwg fn)
+  (setq nm  (strcase (getvar "DWGNAME"))
+        dwg (strcat (getvar "DWGPREFIX") (getvar "DWGNAME")))
+  (cond
+    ((wcmatch nm "*.DXF")
+     (command "_.QSAVE")                      ; το hash να αφορά την τρέχουσα κατάσταση
+     (if (findfile dwg)
+       (dgm:hash-report (getvar "DWGNAME") (dgm:filehash dwg))
+       (princ "\n** Δεν βρέθηκε το τρέχον DXF στον δίσκο. Αποθηκεύστε το και ξαναδοκιμάστε. **")))
+    ((wcmatch nm "*.DWG")
+     (princ "\nΤο τρέχον αρχείο είναι DWG - για το ΔΓΜ απαιτείται DXF.")
+     (princ "\nΑνοίγει το 'Αποθήκευση ως': επιλέξτε τύπο DXF και μετά ξαναεκτελέστε DGMHASH.")
+     (command "_.SAVEAS"))
+    (t
+     (princ "\nΤο σχέδιο δεν είναι αποθηκευμένο ως DXF. Επιλέξτε αρχείο DXF:")
+     (setq fn (getfiled "Επιλογή αρχείου DXF" "" "dxf" 0))
+     (if fn (dgm:hash-report fn (dgm:filehash fn)))))
   (princ))
 
 ;;; DGMKHD - Τοποθέτηση ΚΗΔ (Κωδικός Ηλεκτρονικού Διαγράμματος) στο σχέδιο
@@ -4143,7 +4162,7 @@
   (princ "\n  DGMTXT    Εξαγωγή συντεταγμένων σε TXT")
   (princ "\nΠαραδοτέα:")
   (princ "\n  DGMPREP   Προετοιμασία σχεδίου (images/blocks/OLE/xrefs)")
-  (princ "\n  DGMHASH   Hash SHA512 αρχείου DXF")
+  (princ "\n  DGMHASH   Hash SHA512 του τρέχοντος DXF (αν DWG: εκτελεί SAVEAS)")
   (princ "\n  DGMKHD    Τοποθέτηση ΚΗΔ στο σχέδιο")
   (princ "\n  DGMSIGN   Υπογραφή PDF με JSignPdf")
   (princ "\n  DGMZIP    ZIP παραδοτέων (DXF + υπογεγραμμένο PDF)")
