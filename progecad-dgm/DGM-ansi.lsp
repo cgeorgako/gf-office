@@ -1717,19 +1717,98 @@
       (if line (setq hash (dgm:nospace line)))))
   hash)
 
-;; Εμφάνιση hash + προαιρετική τοποθέτηση κειμένου στο σχέδιο
-(defun dgm:hash-report (fn hash / pt h)
+;; Όνομα αρχείου χωρίς τη διαδρομή
+(defun dgm:basename (p / i b)
+  (setq i (strlen p) b "")
+  (while (and (> i 0) (/= (substr p i 1) "\\") (/= (substr p i 1) "/"))
+    (setq b (strcat (substr p i 1) b) i (1- i)))
+  b)
+
+;; Escape χαρακτήρων για literal string PDF: \ ( )
+(defun dgm:pdfesc (s / out i c)
+  (setq out "" i 1)
+  (while (<= i (strlen s))
+    (setq c (substr s i 1))
+    (setq out (strcat out (cond ((= c "\\") "\\\\")
+                                ((= c "(") "\\(")
+                                ((= c ")") "\\)")
+                                (t c))))
+    (setq i (1+ i)))
+  out)
+
+;; Offset 10 ψηφίων για τον πίνακα xref
+(defun dgm:pad10 (n / s) (setq s (itoa n)) (while (< (strlen s) 10) (setq s (strcat "0" s))) s)
+
+;; Bytes μιας συμβολοσειράς σε text mode = χαρακτήρες + πλήθος \n (κάθε \n
+;; γράφεται ως CRLF στα Windows, δηλ. +1 byte).
+(defun dgm:pdfbw (s / i n)
+  (setq n 0 i 1)
+  (while (<= i (strlen s))
+    (if (= (substr s i 1) "\n") (setq n (1+ n)))
+    (setq i (1+ i)))
+  (+ (strlen s) n))
+
+;; Γράψε συμβολοσειρά στο ανοιχτό PDF και ενημέρωσε τη θέση (byte offset)
+(defun dgm:pdfwr (s) (princ s dgm:*pdf-f*)
+  (setq dgm:*pdf-pos* (+ dgm:*pdf-pos* (dgm:pdfbw s))))
+
+;; Δημιουργία απλού PDF (μία σελίδα) με το κείμενο του hash, στον ίδιο φάκελο
+;; με το DXF. Γράφεται απευθείας (χωρίς εξωτερικά εργαλεία). Επιστρέφει τη
+;; διαδρομή του PDF ή nil. Τα offsets υπολογίζονται θεωρώντας CRLF (Windows,
+;; text mode) ώστε ο πίνακας xref να είναι σωστός.
+(defun dgm:hashpdf (path hash / pdf s1 s2 l1 l2 cont clen
+                      o1 o2 o3 o4 o5 o6 xrefpos)
+  (setq pdf (strcat (dgm:strip-ext path) "_SHA512.pdf"))
+  (setq dgm:*pdf-f* (open pdf "w"))
+  (if (null dgm:*pdf-f*)
+    nil
+    (progn
+      (setq l1 (dgm:pdfesc "DGM - SHA512 hash (DXF) - Elliniko Ktimatologio")
+            l2 (dgm:pdfesc (strcat "Arxeio: " (dgm:basename path)))
+            s1 (substr hash 1 64)
+            s2 (substr hash 65 64))
+      (setq cont (strcat "BT /F1 12 Tf 60 780 Td (" l1 ") Tj "
+                         "0 -26 Td (" l2 ") Tj "
+                         "0 -34 Td /F2 13 Tf (" s1 ") Tj "
+                         "0 -20 Td (" s2 ") Tj ET"))
+      (setq clen (strlen cont))
+      (setq dgm:*pdf-pos* 0)
+      (dgm:pdfwr "%PDF-1.4\n")
+      (setq o1 dgm:*pdf-pos*) (dgm:pdfwr "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+      (setq o2 dgm:*pdf-pos*) (dgm:pdfwr "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
+      (setq o3 dgm:*pdf-pos*) (dgm:pdfwr (strcat "3 0 obj\n<< /Type /Page /Parent 2 0 R "
+                                "/MediaBox [0 0 595 842] /Resources << /Font << "
+                                "/F1 4 0 R /F2 6 0 R >> >> /Contents 5 0 R >>\nendobj\n"))
+      (setq o4 dgm:*pdf-pos*) (dgm:pdfwr "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n")
+      (setq o5 dgm:*pdf-pos*) (dgm:pdfwr (strcat "5 0 obj\n<< /Length " (itoa clen)
+                                " >>\nstream\n" cont "\nendstream\nendobj\n"))
+      (setq o6 dgm:*pdf-pos*) (dgm:pdfwr "6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\nendobj\n")
+      (setq xrefpos dgm:*pdf-pos*)
+      (dgm:pdfwr "xref\n0 7\n0000000000 65535 f \n")
+      (dgm:pdfwr (strcat (dgm:pad10 o1) " 00000 n \n"))
+      (dgm:pdfwr (strcat (dgm:pad10 o2) " 00000 n \n"))
+      (dgm:pdfwr (strcat (dgm:pad10 o3) " 00000 n \n"))
+      (dgm:pdfwr (strcat (dgm:pad10 o4) " 00000 n \n"))
+      (dgm:pdfwr (strcat (dgm:pad10 o5) " 00000 n \n"))
+      (dgm:pdfwr (strcat (dgm:pad10 o6) " 00000 n \n"))
+      (dgm:pdfwr (strcat "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n"
+                  (itoa xrefpos) "\n%%EOF\n"))
+      (close dgm:*pdf-f*)
+      (setq dgm:*pdf-f* nil)
+      (if (findfile pdf) pdf nil))))
+
+;; Εμφάνιση hash και δημιουργία PDF με το κλειδί κατακερματισμού
+(defun dgm:hash-report (path hash / pdf)
   (if (and hash (= 128 (strlen hash)))
     (progn
-      (princ (strcat "\nSHA512 (" fn "):\n" hash))
-      (princ "\n(Το ίδιο κλειδί κατακερματισμού υποβάλλεται στο Κτηματολόγιο.")
-      (princ "\n Μην αποθηκεύσετε ξανά το DXF μετά την τοποθέτηση, γιατί αλλάζει το hash.)")
-      (setq pt (getpoint "\nΘέση κειμένου hash στο σχέδιο (Enter για παράλειψη): "))
-      (if pt
+      (princ (strcat "\nSHA512 (" (dgm:basename path) "):\n" hash))
+      (princ "\n(Το ίδιο κλειδί κατακερματισμού υποβάλλεται στο Κτηματολόγιο.)")
+      (setq pdf (vl-catch-all-apply 'dgm:hashpdf (list path hash)))
+      (if (and pdf (not (vl-catch-all-error-p pdf)) pdf)
         (progn
-          (setq h (dgm:getreal "\nΎψος κειμένου" dgm:*h*))
-          (setq dgm:*h* h)
-          (dgm:text pt h (strcat "SHA512 DXF: " hash) (getvar "CLAYER")))))
+          (princ (strcat "\nΔημιουργήθηκε PDF με το hash: " pdf))
+          (vl-catch-all-apply 'startapp (list "explorer" pdf)))
+        (princ "\n** Το PDF δεν δημιουργήθηκε (το hash εμφανίζεται παραπάνω). **")))
     (princ "\n** Δεν ήταν δυνατή η ανάγνωση του hash. Δοκιμάστε το tools/dxf-hash.cmd εκτός CAD. **")))
 
 ;;; DGMHASH - SHA512 του ΤΡΕΧΟΝΤΟΣ αρχείου:
@@ -1742,7 +1821,7 @@
     ((wcmatch nm "*.DXF")
      (command "_.QSAVE")                      ; το hash να αφορά την τρέχουσα κατάσταση
      (if (findfile dwg)
-       (dgm:hash-report (getvar "DWGNAME") (dgm:filehash dwg))
+       (dgm:hash-report dwg (dgm:filehash dwg))
        (princ "\n** Δεν βρέθηκε το τρέχον DXF στον δίσκο. Αποθηκεύστε το και ξαναδοκιμάστε. **")))
     ((wcmatch nm "*.DWG")
      (princ "\nΤο τρέχον αρχείο είναι DWG - για το ΔΓΜ απαιτείται DXF.")
