@@ -1690,12 +1690,39 @@
     (setq i (1+ i)))
   out)
 
+;; Αληθές αν η συμβολοσειρά αποτελείται μόνο από δεκαεξαδικά ψηφία
+(defun dgm:hexp (s / ok i c)
+  (setq ok (> (strlen s) 0) i 1)
+  (while (and ok (<= i (strlen s)))
+    (setq c (strcase (substr s i 1)))
+    (if (not (or (and (>= c "0") (<= c "9")) (and (>= c "A") (<= c "F"))))
+      (setq ok nil))
+    (setq i (1+ i)))
+  ok)
+
 ;; SHA512 ενός αρχείου μέσω certutil. Επιστρέφει το hash (128 hex) ή nil.
-(defun dgm:filehash (fn / tmp cmd ok sh f line hash)
-  (setq tmp (strcat (getenv "TEMP") "\\dgm_hash.txt")
-        cmd (strcat "cmd /c certutil -hashfile \"" fn "\" SHA512 > \"" tmp "\"")
-        ok  nil)
+;; Αν η διαδρομή έχει ελληνικούς (μη-ASCII) χαρακτήρες, το certutil μέσω cmd
+;; δεν ανοίγει το αρχείο· γι' αυτό αντιγράφουμε πρώτα σε ASCII διαδρομή
+;; (Scripting.FileSystemObject, Unicode-safe) και υπολογίζουμε εκεί το hash.
+(defun dgm:filehash (fn / tdir src tmp cmd ok sh fso f line hash cleaned)
+  (setq tdir (dgm:cache-dir))
+  (if (null tdir) (setq tdir (strcat (getenv "TEMP") "\\")))
   (if vl-load-com (vl-load-com))
+  (setq src fn)
+  (if (not (dgm:asciip fn))
+    (progn
+      (setq fso (vl-catch-all-apply 'vlax-create-object
+                                    (list "Scripting.FileSystemObject")))
+      (if (and fso (not (vl-catch-all-error-p fso)))
+        (progn
+          (setq src (strcat tdir "dgmhash_src.dxf"))
+          (vl-catch-all-apply 'vlax-invoke-method
+                              (list fso 'CopyFile fn src :vlax-true))
+          (vlax-release-object fso)
+          (if (not (findfile src)) (setq src fn))))))
+  (setq tmp (strcat tdir "dgm_hash.txt")
+        cmd (strcat "cmd /c certutil -hashfile \"" src "\" SHA512 > \"" tmp "\"")
+        ok  nil)
   (if vlax-create-object
     (progn
       (setq sh (vlax-create-object "WScript.Shell"))
@@ -1708,13 +1735,15 @@
     (progn
       (startapp cmd)
       (getstring "\nΟ υπολογισμός τρέχει σε παράθυρο cmd. Πατήστε Enter όταν ολοκληρωθεί... ")))
+  ;; σάρωση όλων των γραμμών: κρατάμε τη γραμμή που (χωρίς κενά) είναι 128 hex
   (setq f (open tmp "r"))
   (if f
     (progn
-      (read-line f)                          ; γραμμή τίτλου certutil
-      (setq line (read-line f))              ; γραμμή με το hash
-      (close f)
-      (if line (setq hash (dgm:nospace line)))))
+      (while (setq line (read-line f))
+        (setq cleaned (dgm:nospace line))
+        (if (and (= 128 (strlen cleaned)) (dgm:hexp cleaned))
+          (setq hash cleaned)))
+      (close f)))
   hash)
 
 ;; Όνομα αρχείου χωρίς τη διαδρομή
