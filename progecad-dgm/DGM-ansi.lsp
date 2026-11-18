@@ -1758,7 +1758,9 @@
 ;; text mode) ώστε ο πίνακας xref να είναι σωστός.
 (defun dgm:hashpdf (path hash / pdf s1 s2 l1 l2 cont clen
                       o1 o2 o3 o4 o5 o6 xrefpos)
-  (setq pdf (strcat (dgm:strip-ext path) "_SHA512.pdf"))
+  ;; το PDF ονομάζεται hashkey.pdf, στον ίδιο φάκελο με το DXF
+  (setq pdf (strcat (substr path 1 (- (strlen path) (strlen (dgm:basename path))))
+                    "hashkey.pdf"))
   (setq dgm:*pdf-f* (open pdf "w"))
   (if (null dgm:*pdf-f*)
     nil
