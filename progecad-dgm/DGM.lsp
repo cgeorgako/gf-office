@@ -1004,7 +1004,7 @@
               ((= typ 3) '("BOUND_IMPL" "BOUND_UNIMPL" "PST_KAEK"
                            "TOPO_PROP" "TOPO_PROP_NEW"))
               (t '("BOUND_IMPL" "BOUND_UNIMPL" "PST_KAEK"
-                   "TOPO_PROP" "TOPO_PROP_NEW" "DGM_PROP_FINAL"))))
+                   "TOPO_PROP" "DGM_PROP_FINAL"))))
   (foreach lay req
     (if (null (ssget "_X" (list (cons 8 lay))))
       (progn
