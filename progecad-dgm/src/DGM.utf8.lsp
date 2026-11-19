@@ -1023,6 +1023,44 @@
      'KAEK)
     (t nil)))
 
+;; Έλεγχος: ταυτίζεται κάθε TOPO_PROP με το αντίστοιχο DGM_PROP_FINAL;
+;; Για κάθε TOPO_PROP βρίσκει το DGM_PROP_FINAL με τη μεγαλύτερη επικάλυψη και
+;; υπολογίζει τα XOR τμήματα (διαφορές). Κάθε διαφορά >= minar επισημαίνεται
+;; (πολύγωνο στο DGM_CHECK + αναφορά εμβαδού). Επιστρέφει το πλήθος αποκλίσεων.
+(defun dgm:check-final-topo (tol / topol dgml minar n it best bo g o loops l ar ip)
+  (setq topol (dgm:collect '("TOPO_PROP") T)
+        dgml  (dgm:collect '("DGM_PROP_FINAL") T)
+        minar 0.001 n 0)
+  (if (and topol dgml)
+    (foreach it topol
+      ;; DGM_PROP_FINAL με τη μεγαλύτερη επικάλυψη με το TOPO_PROP
+      (setq best nil bo 0.0)
+      (foreach g dgml
+        (setq o (dgm:ovarea (cadr it) (cadr g) tol))
+        (if (> o bo) (setq bo o best g)))
+      (if (and best (> bo 0.0))
+        (progn
+          (setq loops (dgm:xorloops (list (cadr it) (cadr best)) tol))
+          (foreach l loops
+            (setq ar (dgm:area l))
+            (if (>= ar minar)
+              (progn
+                (setq ip (dgm:innerpt l))
+                (dgm:layer "DGM_CHECK" 1)
+                (dgm:mkpoly l "DGM_CHECK" T)
+                (if ip (dgm:circle ip (max 0.5 (* 0.5 (sqrt ar))) "DGM_CHECK"))
+                (princ (strcat "\n[ΠΡΟΣΟΧΗ] DGM_PROP_FINAL <> TOPO_PROP: τμήμα "
+                               (rtos ar 2 3) " τ.μ."
+                               (if ip (strcat " στο (" (rtos (car ip) 2 2) ", "
+                                              (rtos (cadr ip) 2 2) ")") "")
+                               " - διορθώστε το όριο ώστε να ταυτίζονται."))
+                (setq n (1+ n)))))))))
+  (if (> n 0)
+    (princ (strcat "\n[ΠΡΟΣΟΧΗ] " (itoa n)
+                   " διαφορ(ές) DGM_PROP_FINAL/TOPO_PROP - εκεί ΔΕΝ θα δημιουργηθούν σωστά AREA_A/AREA_D."))
+    (princ "\n[INFO] DGM_PROP_FINAL και TOPO_PROP ταυτίζονται."))
+  n)
+
 ;;; DGMC - Έλεγχος ορθότητας σχεδίου πριν την υποβολή
 (defun c:DGMC ( / tol typ req rule ktexts tx kc nc tc island ip p2 pair labs
                   ss i e d et lay nerr nwarn polys texts pts p
@@ -1313,6 +1351,11 @@
       (princ (strcat "\n[INFO] Άθροισμα εμβαδών DGM_PROP_FINAL: "
                      (rtos sum2 2 2) " τ.μ."))
       (princ (strcat "\n[INFO] Διαφορά: " (rtos (- sum2 sum1) 2 2) " τ.μ."))))
+  ;; 6. Απόκλιση DGM_PROP_FINAL από το αντίστοιχο TOPO_PROP. Το τελικό όριο
+  ;;    του δικού μας γεωτεμαχίου πρέπει να ταυτίζεται με το τοπογραφημένο
+  ;;    (TOPO_PROP). Κάθε διαφορά (ακόμη και μικρό τριγωνικό τμήμα) σημαίνει
+  ;;    ότι τα AREA_A/AREA_D δεν θα υπολογιστούν σωστά εκεί.
+  (setq nwarn (+ nwarn (dgm:check-final-topo tol)))
   ;; Σύνοψη
   (princ (strcat "\n======================================================"
                  "\nΣΦΑΛΜΑΤΑ: " (itoa nerr)
